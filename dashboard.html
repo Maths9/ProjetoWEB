@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard – Nexa Clínica Integrada</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="js/auth.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { poppins: ['Poppins', 'sans-serif'] },
+          colors: {
+            primary:   { DEFAULT: '#c47a85', dark: '#b5606e', light: '#f5d5d8' },
+            sidebar:   { DEFAULT: '#2d1f22', light: '#3d2a2e' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Poppins', sans-serif; }
+
+    /* ---- Sidebar ---- */
+    .sidebar { width: 240px; min-height: 100vh; background: #2d1f22; transition: width 0.3s; }
+    .sidebar.collapsed { width: 68px; }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .sidebar-subtitle,
+    .sidebar.collapsed .user-name,
+    .sidebar.collapsed .user-role { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; }
+    .sidebar.collapsed .logo-wrap { justify-content: center; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; border-radius: 10px; cursor: pointer;
+      transition: background 0.2s; color: #c8a5aa; font-size: 0.84rem;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(196,122,133,0.18); color: #f5d5d8; }
+    .nav-item.active { background: rgba(196,122,133,0.28); color: #f5d5d8; font-weight: 600; }
+    .nav-item svg { flex-shrink: 0; }
+
+    /* ---- KPI Cards ---- */
+    .kpi-card {
+      background: #fff; border-radius: 14px;
+      padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.1); }
+
+    .kpi-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ---- Chart cards ---- */
+    .chart-card {
+      background: #fff; border-radius: 14px; padding: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+
+    /* ---- Table ---- */
+    .table-row:hover { background: #fdf2f4; }
+
+    /* ---- Badges ---- */
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-pink   { background: #fce7f3; color: #9d174d; }
+
+    /* ---- Alert card ---- */
+    .alert-card { border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+
+    /* ---- Scrollbar ---- */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f9fafb; }
+    ::-webkit-scrollbar-thumb { background: #e5c5ca; border-radius: 3px; }
+
+    /* ---- Progress bar ---- */
+    .progress-bar { height: 6px; border-radius: 3px; background: #f3e8ea; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #c47a85, #e8a0aa); }
+
+    /* ---- Topbar ---- */
+    .topbar { background: #fff; border-bottom: 1px solid #f0e6e8; }
+
+    /* ---- Main scroll ---- */
+    .main-content { overflow-y: auto; height: 100vh; }
+
+    /* Toggle sidebar mobile */
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; z-index: 50; height: 100vh; }
+      .sidebar:not(.open) { width: 0; overflow: hidden; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+      .overlay.show { display: block; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex" style="min-height:100vh;">
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar flex flex-col" id="sidebar">
+
+  <!-- Logo -->
+  <div class="logo-wrap flex items-center gap-3 px-5 py-5 border-b border-white/10">
+    <div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+         style="background: linear-gradient(135deg,#f5d5d8,#e8b4ba);">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2C8 2 4 6 4 10c0 5 5 10 8 12 3-2 8-7 8-12 0-4-4-8-8-8z"
+          fill="none" stroke="#b5606e" stroke-width="1.6"/>
+        <path d="M12 2 Q14 8 12 14 Q10 8 12 2z" fill="#c47a85" opacity="0.8"/>
+      </svg>
+    </div>
+    <div>
+      <p class="sidebar-title text-white font-semibold text-sm leading-tight">Nexa Clínica</p>
+      <p class="sidebar-subtitle text-white/40 text-xs">Integrada</p>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+
+    <p class="nav-label text-white/30 text-xs font-semibold uppercase tracking-widest px-3 mb-2">Principal</p>
+
+    <a href="dashboard.html" class="nav-item active" data-modulo="dashboard">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
+      <span class="nav-label">Dashboard</span>
+    </a>
+
+    <a href="clientes.html" class="nav-item" data-modulo="clientes">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.85"/>
+      </svg>
+      <span class="nav-label">Clientes</span>
+    </a>
+
+    <a href="agendamento.html" class="nav-item" data-modulo="agendamento">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span class="nav-label">Agendamento</span>
+    </a>
+
+    <a href="financeiro.html" class="nav-item" data-modulo="financeiro">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+      </svg>
+      <span class="nav-label">Financeiro</span>
+    </a>
+
+    <a href="estoque.html" class="nav-item" data-modulo="estoque">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+      </svg>
+      <span class="nav-label">Estoque</span>
+    </a>
+
+    <a href="relatorios.html" class="nav-item" data-modulo="relatorios">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+      <span class="nav-label">Relatórios</span>
+    </a>
+
+    <div class="border-t border-white/10 my-3"></div>
+    <p class="nav-label text-white/30 text-xs font-semibold uppercase tracking-widest px-3 mb-2">Sistema</p>
+
+    <a href="usuarios.html" class="nav-item" data-modulo="usuarios">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+      </svg>
+      <span class="nav-label">Usuários</span>
+    </a>
+
+    <a href="#" class="nav-item" data-modulo="chatbot">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+      </svg>
+      <span class="nav-label">Chatbot</span>
+    </a>
+  </nav>
+
+  <!-- User no rodapé -->
+  <div class="px-4 py-4 border-t border-white/10 flex items-center gap-3">
+    <div class="w-8 h-8 rounded-full bg-primary-light flex items-center justify-center text-primary-dark font-bold text-sm flex-shrink-0" id="avatarInitial">C</div>
+    <div class="overflow-hidden">
+      <p class="user-name text-white text-xs font-semibold truncate" id="sidebarUserName">Clarissa Melo</p>
+      <p class="user-role text-white/40 text-xs truncate" id="sidebarUserRole">Administradora</p>
+    </div>
+    <button onclick="logout()" class="nav-label ml-auto text-white/40 hover:text-rose-300 transition-colors" title="Sair">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+  </div>
+</aside>
+
+<!-- Overlay mobile -->
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- ===== MAIN ===== -->
+<div class="flex-1 flex flex-col main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar sticky top-0 z-30 flex items-center justify-between px-6 py-3.5">
+    <div class="flex items-center gap-4">
+      <!-- Toggle sidebar -->
+      <button onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-gray-800 font-semibold text-base">Dashboard</h1>
+        <p class="text-gray-400 text-xs" id="dataAtual"></p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <!-- Notificações -->
+      <button class="relative text-gray-400 hover:text-gray-600 transition-colors">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-400 text-white text-xs rounded-full flex items-center justify-center" style="font-size:9px">3</span>
+      </button>
+
+      <!-- Avatar -->
+      <div class="flex items-center gap-2 cursor-pointer">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+             style="background:linear-gradient(135deg,#f5d5d8,#e8b4ba);color:#b5606e;" id="topAvatar">C</div>
+        <div class="hidden sm:block">
+          <div class="flex items-center gap-2">
+            <p class="text-gray-700 text-xs font-semibold" id="topUserName">Clarissa Melo</p>
+            <span id="perfilBadge"></span>
+          </div>
+          <p class="text-gray-400 text-xs" id="topUserRole">Administradora</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="flex-1 p-6 space-y-6">
+
+    <!-- ===== ALERTAS ===== -->
+    <div id="alertasContainer" class="space-y-2"></div>
+
+    <!-- ===== KPI CARDS – linha 1 ===== -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+      <!-- Total Clientes -->
+      <div class="kpi-card">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon" style="background:#fce7f3;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#be185d" stroke-width="1.8">
+              <circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+            </svg>
+          </div>
+          <span class="badge badge-green text-xs">+8%</span>
+        </div>
+        <p class="text-2xl font-bold text-gray-800">148</p>
+        <p class="text-gray-400 text-xs mt-0.5">Total de Clientes</p>
+        <div class="progress-bar mt-3"><div class="progress-fill" style="width:74%"></div></div>
+      </div>
+
+      <!-- Novos Clientes -->
+      <div class="kpi-card">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon" style="background:#dbeafe;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="1.8">
+              <circle cx="12" cy="8" r="4"/><path d="M15 13v2m0 4v-2m0 0h-2m2 0h2"/>
+              <path d="M6 20v-2a4 4 0 0 1 4-4h2"/>
+            </svg>
+          </div>
+          <span class="badge badge-blue">este mês</span>
+        </div>
+        <p class="text-2xl font-bold text-gray-800">12</p>
+        <p class="text-gray-400 text-xs mt-0.5">Novos Clientes</p>
+        <div class="progress-bar mt-3"><div class="progress-fill" style="width:40%;background:linear-gradient(90deg,#60a5fa,#93c5fd)"></div></div>
+      </div>
+
+      <!-- Potenciais Clientes -->
+      <div class="kpi-card">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon" style="background:#fef3c7;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="1.8">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </div>
+          <span class="badge badge-yellow">leads</span>
+        </div>
+        <p class="text-2xl font-bold text-gray-800">34</p>
+        <p class="text-gray-400 text-xs mt-0.5">Potenciais Clientes</p>
+        <div class="progress-bar mt-3"><div class="progress-fill" style="width:55%;background:linear-gradient(90deg,#fbbf24,#fcd34d)"></div></div>
+      </div>
+
+      <!-- Taxa de Conversão -->
+      <div class="kpi-card" data-perm="dashboard.conversao">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon" style="background:#d1fae5;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="1.8">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+              <polyline points="16 7 22 7 22 13"/>
+            </svg>
+          </div>
+          <span class="badge badge-green">+3%</span>
+        </div>
+        <p class="text-2xl font-bold text-gray-800">26%</p>
+        <p class="text-gray-400 text-xs mt-0.5">Taxa de Conversão</p>
+        <div class="progress-bar mt-3"><div class="progress-fill" style="width:26%;background:linear-gradient(90deg,#34d399,#6ee7b7)"></div></div>
+      </div>
+    </div>
+
+    <!-- ===== KPI CARDS – linha 2 ===== -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+      <!-- Agendamentos do dia -->
+      <div class="kpi-card">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon" style="background:#ede9fe;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.8">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </div>
+          <span class="badge" style="background:#ede9fe;color:#5b21b6;">hoje</span>
+        </div>
+        <p class="text-2xl font-bold text-gray-800">7</p>
+        <p class="text-gray-400 text-xs mt-0.5">Agendamentos Hoje</p>
+        <div class="progress-bar mt-3"><div class="progress-fill" style="width:58%;background:linear-gradient(90deg,#a78bfa,#c4b5fd)"></div></div>
+      </div>
+
+      <!-- Faturamento -->
+      <div class="kpi-card" data-perm="dashboard.financeiro">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon" style="background:#d1fae5;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="1.8">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <span class="badge badge-green">mês</span>
+        </div>
+        <p class="text-2xl font-bold text-gray-800">R$&nbsp;12.840</p>
+        <p class="text-gray-400 text-xs mt-0.5">Faturamento</p>
+        <div class="progress-bar mt-3"><div class="progress-fill" style="width:80%;background:linear-gradient(90deg,#34d399,#6ee7b7)"></div></div>
+      </div>
+
+      <!-- Despesas -->
+      <div class="kpi-card" data-perm="dashboard.financeiro">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon" style="background:#fee2e2;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.8">
+              <polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/>
+              <polyline points="16 17 22 17 22 11"/>
+            </svg>
+          </div>
+          <span class="badge badge-red">mês</span>
+        </div>
+        <p class="text-2xl font-bold text-gray-800">R$&nbsp;4.320</p>
+        <p class="text-gray-400 text-xs mt-0.5">Despesas</p>
+        <div class="progress-bar mt-3"><div class="progress-fill" style="width:35%;background:linear-gradient(90deg,#f87171,#fca5a5)"></div></div>
+      </div>
+
+      <!-- Lucro -->
+      <div class="kpi-card" data-perm="dashboard.financeiro">
+        <div class="flex items-start justify-between mb-3">
+          <div class="kpi-icon" style="background:#fce7f3;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#be185d" stroke-width="1.8">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+          </div>
+          <span class="badge badge-pink">+18%</span>
+        </div>
+        <p class="text-2xl font-bold text-gray-800">R$&nbsp;8.520</p>
+        <p class="text-gray-400 text-xs mt-0.5">Lucro do Mês</p>
+        <div class="progress-bar mt-3"><div class="progress-fill" style="width:66%"></div></div>
+      </div>
+    </div>
+
+    <!-- ===== GRÁFICOS + AGENDA ===== -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <!-- Gráfico de Faturamento (linha) -->
+      <div class="chart-card lg:col-span-2" data-perm="dashboard.financeiro">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-gray-700 font-semibold text-sm">Receitas × Despesas</h2>
+            <p class="text-gray-400 text-xs">Últimos 6 meses</p>
+          </div>
+          <select class="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-500 focus:outline-none focus:border-rose-300">
+            <option>2026</option>
+            <option>2025</option>
+          </select>
+        </div>
+        <canvas id="chartFaturamento" height="110"></canvas>
+      </div>
+
+      <!-- Gráfico de Procedimentos (donut) -->
+      <div class="chart-card">
+        <div class="mb-4">
+          <h2 class="text-gray-700 font-semibold text-sm">Procedimentos</h2>
+          <p class="text-gray-400 text-xs">Mais realizados este mês</p>
+        </div>
+        <canvas id="chartProcedimentos" height="190"></canvas>
+        <div class="mt-4 space-y-2" id="legendaProcedimentos"></div>
+      </div>
+    </div>
+
+    <!-- ===== AGENDAMENTOS + ALERTAS ===== -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+      <!-- Agendamentos do dia -->
+      <div class="chart-card lg:col-span-2">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-gray-700 font-semibold text-sm">Agenda de Hoje</h2>
+            <p class="text-gray-400 text-xs" id="dataAgenda"></p>
+          </div>
+          <a href="agendamento.html" class="text-xs text-rose-500 hover:underline">Ver completo →</a>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-xs text-gray-400 border-b border-gray-100">
+                <th class="text-left pb-2 font-medium">Horário</th>
+                <th class="text-left pb-2 font-medium">Cliente</th>
+                <th class="text-left pb-2 font-medium">Procedimento</th>
+                <th class="text-left pb-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody id="tabelaAgenda"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Alertas e pendências -->
+      <div class="space-y-4">
+
+        <!-- Pagamentos pendentes -->
+        <div class="chart-card" data-perm="dashboard.financeiro">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-gray-700 font-semibold text-sm">Pend. Financeiras</h2>
+            <a href="financeiro.html" class="text-xs text-rose-500 hover:underline">Ver →</a>
+          </div>
+          <div class="space-y-2" id="listaPendentes"></div>
+        </div>
+
+        <!-- Estoque baixo -->
+        <div class="chart-card">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-gray-700 font-semibold text-sm">Estoque Baixo</h2>
+            <a href="estoque.html" class="text-xs text-rose-500 hover:underline">Ver →</a>
+          </div>
+          <div class="space-y-2" id="listaEstoqueBaixo"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rodapé -->
+    <p class="text-center text-gray-300 text-xs pb-4">Nexa Clínica Integrada © 2026 – Sistema de Gestão</p>
+  </main>
+</div>
+
+<!-- ===================== SCRIPTS ===================== -->
+<script>
+// ---- Dados simulados ----
+const AGENDAMENTOS_HOJE = [
+  { hora:'08:30', cliente:'Ana Souza',      proc:'Drenagem Linfática',  status:'confirmado' },
+  { hora:'09:00', cliente:'Beatriz Lima',   proc:'Limpeza de Pele',     status:'confirmado' },
+  { hora:'10:00', cliente:'Carla Ferreira', proc:'Redução de Medidas',  status:'aguardando' },
+  { hora:'11:30', cliente:'Diana Rocha',    proc:'Peeling Químico',     status:'confirmado' },
+  { hora:'13:00', cliente:'Elaine Matos',   proc:'Radiofrequência',     status:'cancelado'  },
+  { hora:'14:30', cliente:'Flávia Costa',   proc:'Drenagem Linfática',  status:'aguardando' },
+  { hora:'16:00', cliente:'Gabi Alves',     proc:'Tratamento Facial',   status:'confirmado' },
+];
+
+const PENDENTES = [
+  { cliente:'Carla Ferreira', valor:'R$ 320,00', dias:12 },
+  { cliente:'Renata Dias',    valor:'R$ 580,00', dias:8  },
+  { cliente:'Paula Mendes',   valor:'R$ 150,00', dias:3  },
+];
+
+const ESTOQUE_BAIXO = [
+  { produto:'Gel Redutor',      atual:3,  minimo:10 },
+  { produto:'Ácido Glicólico',  atual:1,  minimo:5  },
+  { produto:'Máscara Facial',   atual:7,  minimo:15 },
+];
+
+// ---- Inicialização com auth.js ----
+const nexaSession = nexaInitPage('dashboard');
+
+// ---- Data ----
+(function(){
+  const now = new Date();
+  const opts = { weekday:'long', year:'numeric', month:'long', day:'numeric' };
+  const str  = now.toLocaleDateString('pt-BR', opts);
+  const cap  = str.charAt(0).toUpperCase() + str.slice(1);
+  document.getElementById('dataAtual').textContent  = cap;
+  document.getElementById('dataAgenda').textContent = cap;
+})();
+
+// ---- Alertas ----
+(function(){
+  const cont = document.getElementById('alertasContainer');
+  const estoqueBaixo = ESTOQUE_BAIXO.length;
+  const pendentes    = PENDENTES.length;
+  if (estoqueBaixo > 0) {
+    cont.innerHTML += `
+    <div class="alert-card" style="background:#fff7ed;border:1px solid #fed7aa;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span class="text-orange-700 text-xs font-medium">${estoqueBaixo} produto(s) com estoque abaixo do mínimo. <a href="estoque.html" class="underline font-semibold">Ver estoque →</a></span>
+    </div>`;
+  }
+  if (pendentes > 0) {
+    cont.innerHTML += `
+    <div class="alert-card" style="background:#fef2f2;border:1px solid #fecaca;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span class="text-red-700 text-xs font-medium">${pendentes} pagamento(s) em aberto. <a href="financeiro.html" class="underline font-semibold">Ver financeiro →</a></span>
+    </div>`;
+  }
+})();
+
+// ---- Tabela de Agenda ----
+(function(){
+  const tbody = document.getElementById('tabelaAgenda');
+  const badges = {
+    confirmado: 'badge-green',
+    aguardando:  'badge-yellow',
+    cancelado:   'badge-red',
+  };
+  const labels = { confirmado:'Confirmado', aguardando:'Aguardando', cancelado:'Cancelado' };
+
+  AGENDAMENTOS_HOJE.forEach(a => {
+    tbody.innerHTML += `
+    <tr class="table-row border-b border-gray-50">
+      <td class="py-2.5 text-gray-600 font-medium text-xs">${a.hora}</td>
+      <td class="py-2.5 text-gray-700 text-xs">${a.cliente}</td>
+      <td class="py-2.5 text-gray-500 text-xs">${a.proc}</td>
+      <td class="py-2.5"><span class="badge ${badges[a.status]}">${labels[a.status]}</span></td>
+    </tr>`;
+  });
+})();
+
+// ---- Pagamentos pendentes ----
+(function(){
+  const cont = document.getElementById('listaPendentes');
+  PENDENTES.forEach(p => {
+    const cor = p.dias > 10 ? 'text-red-500' : p.dias > 5 ? 'text-yellow-500' : 'text-gray-400';
+    cont.innerHTML += `
+    <div class="flex items-center justify-between py-2 border-b border-gray-50">
+      <div>
+        <p class="text-gray-700 text-xs font-medium">${p.cliente}</p>
+        <p class="${cor} text-xs">${p.dias} dias em aberto</p>
+      </div>
+      <span class="text-gray-800 text-xs font-semibold">${p.valor}</span>
+    </div>`;
+  });
+})();
+
+// ---- Estoque baixo ----
+(function(){
+  const cont = document.getElementById('listaEstoqueBaixo');
+  ESTOQUE_BAIXO.forEach(e => {
+    const pct = Math.round((e.atual / e.minimo) * 100);
+    const cor = e.atual <= 2 ? '#ef4444' : '#f97316';
+    cont.innerHTML += `
+    <div class="py-2 border-b border-gray-50">
+      <div class="flex justify-between mb-1">
+        <p class="text-gray-700 text-xs font-medium">${e.produto}</p>
+        <p class="text-xs font-semibold" style="color:${cor}">${e.atual}/${e.minimo}</p>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${pct}%;background:${cor}"></div>
+      </div>
+    </div>`;
+  });
+})();
+
+// ---- Gráfico Faturamento (linha) ----
+(function(){
+  const ctx = document.getElementById('chartFaturamento').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set'],
+      datasets: [
+        {
+          label: 'Receitas',
+          data: [9200, 10500, 11800, 10200, 13400, 12840],
+          borderColor: '#c47a85', backgroundColor: 'rgba(196,122,133,0.1)',
+          borderWidth: 2.5, pointBackgroundColor: '#c47a85',
+          pointRadius: 4, tension: 0.4, fill: true
+        },
+        {
+          label: 'Despesas',
+          data: [3800, 4200, 4100, 3600, 4800, 4320],
+          borderColor: '#94a3b8', backgroundColor: 'rgba(148,163,184,0.05)',
+          borderWidth: 2, pointBackgroundColor: '#94a3b8',
+          pointRadius: 4, tension: 0.4, fill: true, borderDash: [5,3]
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { font: { family:'Poppins', size:11 }, color:'#6b7280', boxWidth:12 } },
+        tooltip: { mode:'index', intersect:false,
+          callbacks: { label: ctx => ` R$ ${ctx.parsed.y.toLocaleString('pt-BR')}` }
+        }
+      },
+      scales: {
+        x: { grid:{ display:false }, ticks:{ font:{family:'Poppins',size:11}, color:'#9ca3af' } },
+        y: { grid:{ color:'#f3f4f6' }, ticks:{ font:{family:'Poppins',size:10}, color:'#9ca3af',
+          callback: v => 'R$'+v.toLocaleString('pt-BR') } }
+      }
+    }
+  });
+})();
+
+// ---- Gráfico Procedimentos (donut) ----
+(function(){
+  const procs  = ['Drenagem', 'Peeling', 'Radiofrequência', 'Limpeza de Pele', 'Outros'];
+  const qtds   = [32, 18, 24, 15, 11];
+  const cores  = ['#c47a85','#e8a0aa','#f5c5cb','#a85c6a','#d4919b'];
+  const total  = qtds.reduce((a,b)=>a+b,0);
+
+  const ctx = document.getElementById('chartProcedimentos').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: procs, datasets: [{ data: qtds, backgroundColor: cores, borderWidth: 0, hoverOffset:6 }] },
+    options: {
+      cutout: '68%', responsive:true,
+      plugins: { legend:{ display:false }, tooltip:{ callbacks:{
+        label: ctx => ` ${ctx.label}: ${ctx.parsed} atend.`
+      }}}
+    }
+  });
+
+  const leg = document.getElementById('legendaProcedimentos');
+  procs.forEach((p,i) => {
+    const pct = Math.round((qtds[i]/total)*100);
+    leg.innerHTML += `
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" style="background:${cores[i]}"></span>
+        <span class="text-gray-500 text-xs">${p}</span>
+      </div>
+      <span class="text-gray-700 text-xs font-semibold">${pct}%</span>
+    </div>`;
+  });
+})();
+
+// ---- Sidebar toggle ----
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  const o = document.getElementById('overlay');
+  if (window.innerWidth < 768) {
+    s.classList.toggle('open');
+    o.classList.toggle('show');
+  } else {
+    s.classList.toggle('collapsed');
+  }
+}
+
+// ---- Logout ----
+function logout() {
+  localStorage.removeItem('usuario_logado');
+  window.location.href = 'login.html';
+}
+</script>
+</body>
+</html>

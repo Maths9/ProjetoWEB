@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Agendamento – Nexa Clínica Integrada</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/auth.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { poppins: ['Poppins', 'sans-serif'] },
+          colors: {
+            primary:   { DEFAULT: '#c47a85', dark: '#b5606e', light: '#f5d5d8' },
+            sidebar:   { DEFAULT: '#2d1f22', light: '#3d2a2e' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Poppins', sans-serif; }
+    .sidebar { width: 240px; min-height: 100vh; background: #2d1f22; transition: width 0.3s; }
+    .sidebar.collapsed { width: 68px; }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .sidebar-subtitle,
+    .sidebar.collapsed .user-name,
+    .sidebar.collapsed .user-role { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; }
+    .sidebar.collapsed .logo-wrap { justify-content: center; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; border-radius: 10px; cursor: pointer;
+      transition: background 0.2s; color: #c8a5aa; font-size: 0.84rem;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(196,122,133,0.18); color: #f5d5d8; }
+    .nav-item.active { background: rgba(196,122,133,0.28); color: #f5d5d8; font-weight: 600; }
+    .nav-item svg { flex-shrink: 0; }
+
+    .kpi-card {
+      background: #fff; border-radius: 14px;
+      padding: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .chart-card {
+      background: #fff; border-radius: 14px; padding: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .table-row:hover { background: #fdf2f4; }
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-pink   { background: #fce7f3; color: #9d174d; }
+
+    .topbar { background: #fff; border-bottom: 1px solid #f0e6e8; }
+    .main-content { overflow-y: auto; height: 100vh; }
+
+    .view-btn {
+      padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; font-weight: 500;
+      color: #6b7280; transition: all 0.2s;
+    }
+    .view-btn.active {
+      background: #c47a85; color: #fff; font-weight: 600;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: none; align-items: center; justify-content: center; z-index: 60;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 16px; width: 100%; max-width: 520px;
+      padding: 26px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; z-index: 50; height: 100vh; }
+      .sidebar:not(.open) { width: 0; overflow: hidden; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+      .overlay.show { display: block; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex" style="min-height:100vh;">
+
+<!-- SIDEBAR -->
+<aside class="sidebar flex flex-col" id="sidebar">
+  <div id="sidebarContent" class="flex flex-col h-full"></div>
+</aside>
+
+<!-- Mobile Overlay -->
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar sticky top-0 z-30 flex items-center justify-between px-6 py-3.5">
+    <div class="flex items-center gap-4">
+      <button onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-gray-800 font-semibold text-base">Agenda & Procedimentos</h1>
+        <p class="text-gray-400 text-xs" id="dataAtual"></p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 cursor-pointer">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+             style="background:linear-gradient(135deg,#f5d5d8,#e8b4ba);color:#b5606e;" id="topAvatar">C</div>
+        <div class="hidden sm:block">
+          <div class="flex items-center gap-2">
+            <p class="text-gray-700 text-xs font-semibold" id="topUserName">Usuário</p>
+            <span id="perfilBadge"></span>
+          </div>
+          <p class="text-gray-400 text-xs" id="topUserRole">Perfil</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="flex-1 p-6 space-y-6">
+
+    <!-- KPI ROW -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Total do Dia</span>
+          <div class="w-7 h-7 rounded-lg bg-pink-50 flex items-center justify-center text-rose-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-gray-800" id="kpiTotal">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">agendamentos marcados</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Confirmados</span>
+          <div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-emerald-600" id="kpiConfirmados">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">atendimentos certos</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Aguardando</span>
+          <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-amber-600" id="kpiAguardando">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">aguardando confirmação</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Cancelados</span>
+          <div class="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-red-500" id="kpiCancelados">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">desmarcados</p>
+      </div>
+    </div>
+
+    <!-- Controls Bar -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <!-- Date Nav -->
+      <div class="flex items-center gap-3 bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-100">
+        <button onclick="mudarData(-1)" class="text-gray-400 hover:text-gray-700 p-1">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input type="date" id="filtroData" onchange="selecionarData(this.value)"
+               class="text-xs font-semibold text-gray-700 bg-transparent border-0 focus:outline-none cursor-pointer"/>
+        <button onclick="mudarData(1)" class="text-gray-400 hover:text-gray-700 p-1">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button onclick="irParaHoje()" class="text-[11px] font-medium text-rose-600 hover:underline border-l border-gray-200 pl-2">Hoje</button>
+      </div>
+
+      <!-- View Switcher & Action Button -->
+      <div class="flex items-center gap-3">
+        <div class="flex items-center bg-white p-1 rounded-xl shadow-sm border border-gray-100">
+          <button class="view-btn active" onclick="trocarVisualizacao('lista', this)">Lista</button>
+          <button class="view-btn" onclick="trocarVisualizacao('semanal', this)">Semanal</button>
+          <button class="view-btn" onclick="trocarVisualizacao('mensal', this)">Mensal</button>
+        </div>
+
+        <button data-perm="agendamento.criar" onclick="abrirModalNovo()"
+                class="flex items-center gap-2 bg-[#c47a85] hover:bg-[#b5606e] text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span>Novo Agendamento</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- VIEW: LISTA -->
+    <div id="viewLista" class="chart-card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-600">
+          <thead>
+            <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] pb-3">
+              <th class="py-3 px-4 font-semibold">Horário</th>
+              <th class="py-3 px-4 font-semibold">Cliente</th>
+              <th class="py-3 px-4 font-semibold">Procedimento</th>
+              <th class="py-3 px-4 font-semibold">Duração</th>
+              <th class="py-3 px-4 font-semibold">Valor</th>
+              <th class="py-3 px-4 font-semibold">Status</th>
+              <th class="py-3 px-4 font-semibold text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaAgendamentos" class="divide-y divide-gray-50"></tbody>
+        </table>
+      </div>
+      <div id="emptyLista" class="hidden py-12 text-center text-gray-400">
+        <p class="text-xs">Nenhum agendamento para este dia.</p>
+      </div>
+    </div>
+
+    <!-- VIEW: SEMANAL -->
+    <div id="viewSemanal" class="hidden chart-card">
+      <div class="grid grid-cols-1 md:grid-cols-7 gap-3" id="gridSemanal">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- VIEW: MENSAL -->
+    <div id="viewMensal" class="hidden chart-card">
+      <div class="text-center mb-4 font-semibold text-gray-700 text-sm">Setembro 2026</div>
+      <div class="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-gray-400 mb-2">
+        <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+      </div>
+      <div class="grid grid-cols-7 gap-2" id="gridMensal">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL NOVO / EDITAR -->
+<div class="modal-overlay" id="modalAgendamento">
+  <div class="modal-box">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-sm" id="modalAgendamentoTitulo">Novo Agendamento</h3>
+      <button onclick="fecharModal()" class="text-gray-400 hover:text-gray-600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <form id="formAgendamento" onsubmit="salvarAgendamento(event)" class="mt-4 space-y-3">
+      <input type="hidden" id="agendamentoId"/>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Data *</label>
+          <input type="date" id="agendData" required class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Horário *</label>
+          <input type="time" id="agendHora" required class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400"/>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Cliente *</label>
+        <select id="agendCliente" required class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400">
+          <option value="">Selecione a cliente...</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Procedimento *</label>
+        <select id="agendProc" required onchange="ajustarValorProc(this.value)" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400">
+          <option value="">Selecione o procedimento...</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Duração (min)</label>
+          <input type="number" id="agendDuracao" value="60" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Valor (R$)</label>
+          <input type="number" step="0.01" id="agendValor" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400"/>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="fecharModal()" class="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg">
+          Cancelar
+        </button>
+        <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-[#c47a85] hover:bg-[#b5606e] rounded-lg shadow-sm">
+          Salvar Agendamento
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const PROCEDIMENTOS = [
+  { nome: 'Drenagem Linfática',  dur: 60, preco: 180 },
+  { nome: 'Limpeza de Pele',     dur: 45, preco: 150 },
+  { nome: 'Redução de Medidas',  dur: 90, preco: 220 },
+  { nome: 'Peeling Químico',     dur: 60, preco: 200 },
+  { nome: 'Radiofrequência',     dur: 60, preco: 250 },
+  { nome: 'Tratamento Facial',   dur: 45, preco: 160 },
+  { nome: 'Massagem Modeladora', dur: 60, preco: 170 },
+  { nome: 'Criolipólise',        dur: 90, preco: 380 }
+];
+
+const CLIENTES_NOMES = [
+  'Ana Souza','Beatriz Lima','Carla Ferreira','Diana Rocha',
+  'Elaine Matos','Flávia Costa','Gabi Alves','Helena Dias'
+];
+
+let AGENDAMENTOS = [
+  { id:1, data:'2026-09-08', hora:'08:30', cliente:'Ana Souza',      proc:'Drenagem Linfática',  duracao:60, valor:180, status:'confirmado' },
+  { id:2, data:'2026-09-08', hora:'09:00', cliente:'Beatriz Lima',   proc:'Limpeza de Pele',     duracao:45, valor:150, status:'confirmado' },
+  { id:3, data:'2026-09-08', hora:'10:00', cliente:'Carla Ferreira', proc:'Redução de Medidas',  duracao:90, valor:220, status:'aguardando' },
+  { id:4, data:'2026-09-08', hora:'11:30', cliente:'Diana Rocha',    proc:'Peeling Químico',     duracao:60, valor:200, status:'confirmado' },
+  { id:5, data:'2026-09-08', hora:'13:00', cliente:'Elaine Matos',   proc:'Radiofrequência',     duracao:60, valor:250, status:'cancelado'  },
+  { id:6, data:'2026-09-08', hora:'14:30', cliente:'Flávia Costa',   proc:'Drenagem Linfática',  duracao:60, valor:180, status:'aguardando' },
+  { id:7, data:'2026-09-08', hora:'16:00', cliente:'Gabi Alves',     proc:'Tratamento Facial',   duracao:45, valor:160, status:'confirmado' },
+  { id:8, data:'2026-09-09', hora:'09:00', cliente:'Helena Dias',    proc:'Drenagem Linfática',  duracao:60, valor:180, status:'confirmado' },
+  { id:9, data:'2026-09-09', hora:'10:30', cliente:'Ana Souza',      proc:'Massagem Modeladora', duracao:60, valor:170, status:'aguardando' },
+  { id:10,data:'2026-09-10', hora:'08:00', cliente:'Beatriz Lima',   proc:'Limpeza de Pele',     duracao:45, valor:150, status:'confirmado' },
+];
+
+let dataSelecionada = '2026-09-08';
+let modoVisualizacao = 'lista';
+
+document.addEventListener('DOMContentLoaded', () => {
+  nexaInitPage('agendamento');
+  document.getElementById('filtroData').value = dataSelecionada;
+
+  // Popula selects
+  const sCli = document.getElementById('agendCliente');
+  CLIENTES_NOMES.forEach(c => sCli.innerHTML += `<option value="${c}">${c}</option>`);
+
+  const sProc = document.getElementById('agendProc');
+  PROCEDIMENTOS.forEach(p => sProc.innerHTML += `<option value="${p.nome}">${p.nome}</option>`);
+
+  renderizar();
+});
+
+function renderizar() {
+  atualizarKpis();
+  if (modoVisualizacao === 'lista') renderizarLista();
+  else if (modoVisualizacao === 'semanal') renderizarSemanal();
+  else if (modoVisualizacao === 'mensal') renderizarMensal();
+}
+
+function atualizarKpis() {
+  const dia = AGENDAMENTOS.filter(a => a.data === dataSelecionada);
+  document.getElementById('kpiTotal').textContent = dia.length;
+  document.getElementById('kpiConfirmados').textContent = dia.filter(a => a.status === 'confirmado').length;
+  document.getElementById('kpiAguardando').textContent = dia.filter(a => a.status === 'aguardando').length;
+  document.getElementById('kpiCancelados').textContent = dia.filter(a => a.status === 'cancelado').length;
+}
+
+function renderizarLista() {
+  const tbody = document.getElementById('tabelaAgendamentos');
+  const empty = document.getElementById('emptyLista');
+  tbody.innerHTML = '';
+
+  const dia = AGENDAMENTOS.filter(a => a.data === dataSelecionada).sort((a,b) => a.hora.localeCompare(b.hora));
+  if (dia.length === 0) {
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  const badgeStatus = {
+    confirmado: 'badge-green',
+    aguardando:  'badge-yellow',
+    cancelado:   'badge-red',
+    concluido:   'badge-blue'
+  };
+
+  const labelStatus = {
+    confirmado: 'Confirmado',
+    aguardando:  'Aguardando',
+    cancelado:   'Cancelado',
+    concluido:   'Concluído'
+  };
+
+  const podeEditar = nexaPode('agendamento', 'editar');
+  const podeCancelar = nexaPode('agendamento', 'cancelar');
+
+  dia.forEach(a => {
+    const tr = document.createElement('tr');
+    tr.className = 'table-row';
+    tr.innerHTML = `
+      <td class="py-3 px-4 font-semibold text-gray-800">${a.hora}</td>
+      <td class="py-3 px-4 font-medium text-gray-700">${a.cliente}</td>
+      <td class="py-3 px-4 text-gray-600">${a.proc}</td>
+      <td class="py-3 px-4 text-gray-400">${a.duracao} min</td>
+      <td class="py-3 px-4 font-medium text-gray-700">R$ ${Number(a.valor).toFixed(2).replace('.',',')}</td>
+      <td class="py-3 px-4"><span class="badge ${badgeStatus[a.status]}">${labelStatus[a.status]}</span></td>
+      <td class="py-3 px-4 text-right">
+        <div class="flex items-center justify-end gap-1.5">
+          ${a.status !== 'confirmado' ? `
+            <button onclick="mudarStatus(${a.id}, 'confirmado')" title="Confirmar"
+                    class="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>` : ''}
+          ${podeEditar ? `
+            <button onclick="editarAgendamento(${a.id})" title="Editar"
+                    class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>` : ''}
+          ${podeCancelar && a.status !== 'cancelado' ? `
+            <button onclick="mudarStatus(${a.id}, 'cancelado')" title="Cancelar"
+                    class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>` : ''}
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderizarSemanal() {
+  const container = document.getElementById('gridSemanal');
+  container.innerHTML = '';
+  const diasSemana = [
+    { label:'Seg 07/09', data:'2026-09-07' },
+    { label:'Ter 08/09', data:'2026-09-08' },
+    { label:'Qua 09/09', data:'2026-09-09' },
+    { label:'Qui 10/09', data:'2026-09-10' },
+    { label:'Sex 11/09', data:'2026-09-11' },
+    { label:'Sáb 12/09', data:'2026-09-12' },
+    { label:'Dom 13/09', data:'2026-09-13' },
+  ];
+
+  diasSemana.forEach(d => {
+    const ags = AGENDAMENTOS.filter(a => a.data === d.data);
+    const isToday = d.data === dataSelecionada;
+    let cards = ags.map(a => `
+      <div class="p-2 mb-2 rounded-lg bg-pink-50 border border-pink-100 text-[11px]">
+        <div class="font-bold text-gray-800">${a.hora} - ${a.cliente}</div>
+        <div class="text-gray-500 truncate">${a.proc}</div>
+      </div>
+    `).join('');
+
+    if (ags.length === 0) {
+      cards = `<p class="text-[10px] text-gray-300 italic">Sem atendimentos</p>`;
+    }
+
+    container.innerHTML += `
+      <div class="p-2.5 rounded-xl border ${isToday ? 'border-rose-300 bg-rose-50/30' : 'border-gray-100 bg-gray-50/50'}">
+        <p class="font-semibold text-xs mb-2 ${isToday ? 'text-rose-600' : 'text-gray-600'}">${d.label}</p>
+        <div>${cards}</div>
+      </div>
+    `;
+  });
+}
+
+function renderizarMensal() {
+  const container = document.getElementById('gridMensal');
+  container.innerHTML = '';
+  // Setembro 2026 inicia na Terça (2 dias de offset: Dom=30, Seg=31)
+  for (let i = 1; i <= 30; i++) {
+    const diaFmt = (i < 10 ? '0' : '') + i;
+    const dataStr = `2026-09-${diaFmt}`;
+    const ags = AGENDAMENTOS.filter(a => a.data === dataStr);
+    const isSelected = dataStr === dataSelecionada;
+
+    container.innerHTML += `
+      <div onclick="selecionarData('${dataStr}')"
+           class="h-16 p-1.5 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${isSelected ? 'border-rose-400 bg-rose-50/50' : 'border-gray-100 hover:border-gray-300'}">
+        <span class="text-xs font-semibold ${isSelected ? 'text-rose-600' : 'text-gray-700'}">${i}</span>
+        ${ags.length > 0 ? `
+          <div class="flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            <span class="text-[10px] font-bold text-rose-600">${ags.length}</span>
+          </div>` : '<span></span>'}
+      </div>
+    `;
+  }
+}
+
+// ---- NAVEGAÇÃO DE DATA ----
+function selecionarData(dt) {
+  dataSelecionada = dt;
+  document.getElementById('filtroData').value = dt;
+  renderizar();
+}
+
+function mudarData(offset) {
+  const d = new Date(dataSelecionada + 'T12:00:00');
+  d.setDate(d.getDate() + offset);
+  dataSelecionada = d.toISOString().split('T')[0];
+  document.getElementById('filtroData').value = dataSelecionada;
+  renderizar();
+}
+
+function irParaHoje() {
+  selecionarData('2026-09-08');
+}
+
+function trocarVisualizacao(modo, btn) {
+  modoVisualizacao = modo;
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  document.getElementById('viewLista').classList.toggle('hidden', modo !== 'lista');
+  document.getElementById('viewSemanal').classList.toggle('hidden', modo !== 'semanal');
+  document.getElementById('viewMensal').classList.toggle('hidden', modo !== 'mensal');
+
+  renderizar();
+}
+
+// ---- MODAL / CRUD ----
+function abrirModalNovo() {
+  document.getElementById('formAgendamento').reset();
+  document.getElementById('agendamentoId').value = '';
+  document.getElementById('agendData').value = dataSelecionada;
+  document.getElementById('modalAgendamentoTitulo').textContent = 'Novo Agendamento';
+  document.getElementById('modalAgendamento').classList.add('show');
+}
+
+function editarAgendamento(id) {
+  const a = AGENDAMENTOS.find(item => item.id === id);
+  if (!a) return;
+  document.getElementById('agendamentoId').value = a.id;
+  document.getElementById('agendData').value = a.data;
+  document.getElementById('agendHora').value = a.hora;
+  document.getElementById('agendCliente').value = a.cliente;
+  document.getElementById('agendProc').value = a.proc;
+  document.getElementById('agendDuracao').value = a.duracao;
+  document.getElementById('agendValor').value = a.valor;
+  document.getElementById('modalAgendamentoTitulo').textContent = 'Editar Agendamento';
+  document.getElementById('modalAgendamento').classList.add('show');
+}
+
+function fecharModal() {
+  document.getElementById('modalAgendamento').classList.remove('show');
+}
+
+function ajustarValorProc(nome) {
+  const p = PROCEDIMENTOS.find(item => item.nome === nome);
+  if (p) {
+    document.getElementById('agendDuracao').value = p.dur;
+    document.getElementById('agendValor').value = p.preco;
+  }
+}
+
+function salvarAgendamento(e) {
+  e.preventDefault();
+  const id = document.getElementById('agendamentoId').value;
+  const data = document.getElementById('agendData').value;
+  const hora = document.getElementById('agendHora').value;
+  const cliente = document.getElementById('agendCliente').value;
+  const proc = document.getElementById('agendProc').value;
+  const duracao = parseInt(document.getElementById('agendDuracao').value);
+  const valor = parseFloat(document.getElementById('agendValor').value);
+
+  if (id) {
+    const idx = AGENDAMENTOS.findIndex(a => a.id === parseInt(id));
+    if (idx !== -1) {
+      AGENDAMENTOS[idx] = { ...AGENDAMENTOS[idx], data, hora, cliente, proc, duracao, valor };
+    }
+  } else {
+    const novoId = AGENDAMENTOS.length ? Math.max(...AGENDAMENTOS.map(a => a.id)) + 1 : 1;
+    AGENDAMENTOS.push({ id: novoId, data, hora, cliente, proc, duracao, valor, status: 'confirmado' });
+  }
+
+  fecharModal();
+  renderizar();
+}
+
+function mudarStatus(id, novoStatus) {
+  const a = AGENDAMENTOS.find(item => item.id === id);
+  if (a) {
+    a.status = novoStatus;
+    renderizar();
+  }
+}
+</script>
+</body>
+</html>

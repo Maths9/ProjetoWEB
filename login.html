@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login – Nexa Clínica Integrada</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { poppins: ['Poppins', 'sans-serif'] },
+          colors: {
+            rose: {
+              50:  '#fff1f2',
+              100: '#ffe4e6',
+              200: '#fecdd3',
+              300: '#fda4af',
+              400: '#fb7185',
+              500: '#c47a85',
+              600: '#b5606e',
+              700: '#9f3a4a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Poppins', sans-serif; }
+
+    /* Fundo com blur simulando ambiente de clínica */
+    .bg-clinic {
+      background: linear-gradient(135deg,
+        #f8e8e8 0%,
+        #f2d9d9 20%,
+        #ecdede 40%,
+        #f5e6e6 60%,
+        #efe0e0 80%,
+        #f9ecec 100%);
+      position: relative;
+    }
+
+    /* Elementos decorativos no fundo */
+    .bg-clinic::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 40% 60% at 15% 50%, rgba(255,255,255,0.6) 0%, transparent 70%),
+        radial-gradient(ellipse 30% 50% at 85% 30%, rgba(255,255,255,0.4) 0%, transparent 70%),
+        radial-gradient(ellipse 20% 30% at 90% 80%, rgba(210,180,180,0.3) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Retângulos decorativos que simulam mobília desfocada */
+    .decor-left {
+      position: absolute;
+      left: 4%;
+      top: 10%;
+      width: 9%;
+      height: 75%;
+      background: rgba(255,255,255,0.45);
+      border-radius: 10px;
+      filter: blur(8px);
+    }
+    .decor-right {
+      position: absolute;
+      right: 6%;
+      top: 20%;
+      width: 12%;
+      height: 55%;
+      background: rgba(220,195,195,0.35);
+      border-radius: 10px;
+      filter: blur(10px);
+    }
+    .decor-plant {
+      position: absolute;
+      right: 8%;
+      bottom: 5%;
+      width: 7%;
+      height: 35%;
+      background: rgba(160,185,150,0.3);
+      border-radius: 50% 50% 10px 10px;
+      filter: blur(8px);
+    }
+    .decor-shelf {
+      position: absolute;
+      left: 2%;
+      top: 8%;
+      width: 13%;
+      height: 10%;
+      background: rgba(230,210,210,0.5);
+      border-radius: 6px;
+      filter: blur(6px);
+    }
+
+    /* Card principal */
+    .login-card {
+      background: rgba(255, 255, 255, 0.97);
+      border-radius: 18px;
+      box-shadow:
+        0 20px 60px rgba(150, 80, 90, 0.12),
+        0 4px 20px rgba(0,0,0,0.08);
+    }
+
+    /* Input focus */
+    .input-field:focus {
+      outline: none;
+      border-color: #c47a85;
+      box-shadow: 0 0 0 3px rgba(196, 122, 133, 0.15);
+    }
+
+    /* Botão entrar */
+    .btn-entrar {
+      background: linear-gradient(135deg, #c47a85 0%, #b5606e 100%);
+      transition: all 0.2s ease;
+    }
+    .btn-entrar:hover {
+      background: linear-gradient(135deg, #b5606e 0%, #9f3a4a 100%);
+      box-shadow: 0 6px 20px rgba(180, 90, 110, 0.35);
+      transform: translateY(-1px);
+    }
+    .btn-entrar:active {
+      transform: translateY(0);
+    }
+
+    /* Divisor */
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e5e7eb;
+    }
+
+    /* Logo ícone */
+    .logo-icon {
+      background: linear-gradient(135deg, #f5d5d8 0%, #e8b4ba 100%);
+      border-radius: 50%;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Mensagem de erro */
+    .error-msg {
+      display: none;
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #9f3a4a;
+      font-size: 0.8rem;
+    }
+
+    /* Toast de sucesso */
+    #toast {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      background: #fff;
+      border-left: 4px solid #c47a85;
+      border-radius: 10px;
+      padding: 14px 20px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      display: none;
+      z-index: 9999;
+      font-size: 0.85rem;
+      color: #374151;
+      min-width: 220px;
+    }
+  </style>
+</head>
+<body class="bg-clinic min-h-screen flex items-center justify-center relative overflow-hidden">
+
+  <!-- Elementos decorativos de fundo (simula ambiente clínica) -->
+  <div class="decor-left"></div>
+  <div class="decor-right"></div>
+  <div class="decor-plant"></div>
+  <div class="decor-shelf"></div>
+
+  <!-- Card de Login -->
+  <div class="login-card w-full max-w-md mx-4 p-8 relative z-10">
+
+    <!-- Logo + Nome da Clínica -->
+    <div class="flex items-center gap-3 mb-7">
+      <div class="logo-icon">
+        <!-- Ícone de folha/estética SVG -->
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C8 2 4 6 4 10c0 5 5 10 8 12 3-2 8-7 8-12 0-4-4-8-8-8z"
+            fill="none" stroke="#b5606e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 2 Q14 8 12 14 Q10 8 12 2z" fill="#c47a85" opacity="0.6"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-gray-800 font-semibold text-sm leading-tight">Nexa Clínica</p>
+        <p class="text-gray-800 font-semibold text-sm leading-tight">Integrada</p>
+      </div>
+    </div>
+
+    <!-- Título -->
+    <h1 class="text-2xl font-bold text-gray-800 mb-1">Bem-vinda de volta</h1>
+    <p class="text-gray-400 text-sm mb-6">Por favor, faça login para acessar seu painel.</p>
+
+    <!-- Mensagem de erro -->
+    <div class="error-msg mb-4" id="errorMsg">
+      ⚠️ E-mail ou senha incorretos. Tente novamente.
+    </div>
+
+    <!-- Formulário -->
+    <form id="loginForm" onsubmit="handleLogin(event)" novalidate>
+
+      <!-- Campo E-mail -->
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-600 mb-1.5">E-mail ou Usuário</label>
+        <div class="relative">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+            <!-- Ícone envelope -->
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="2" y="4" width="20" height="16" rx="3"/>
+              <path d="M2 7l10 7 10-7"/>
+            </svg>
+          </span>
+          <input
+            type="email"
+            id="emailInput"
+            placeholder="clarissa.melo@clinica.com.br"
+            class="input-field w-full border border-gray-200 rounded-lg pl-10 pr-4 py-3 text-sm text-gray-700 bg-white placeholder-gray-300 transition-all"
+          />
+        </div>
+      </div>
+
+      <!-- Campo Senha -->
+      <div class="mb-1">
+        <label class="block text-xs font-semibold text-gray-600 mb-1.5">Senha</label>
+        <div class="relative">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+            <!-- Ícone cadeado -->
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="5" y="11" width="14" height="10" rx="2"/>
+              <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+            </svg>
+          </span>
+          <input
+            type="password"
+            id="senhaInput"
+            placeholder="••••••••"
+            class="input-field w-full border border-gray-200 rounded-lg pl-10 pr-11 py-3 text-sm text-gray-700 bg-white placeholder-gray-300 transition-all"
+          />
+          <!-- Toggle mostrar/ocultar senha -->
+          <button
+            type="button"
+            onclick="toggleSenha()"
+            class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Mostrar/ocultar senha"
+          >
+            <svg id="eyeIcon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Esqueceu a senha -->
+      <div class="flex justify-end mb-6 mt-1">
+        <a href="#" class="text-xs text-rose-500 hover:text-rose-700 transition-colors hover:underline">
+          Esqueceu a senha?
+        </a>
+      </div>
+
+      <!-- Botão Entrar -->
+      <button
+        type="submit"
+        class="btn-entrar w-full text-white font-semibold py-3.5 rounded-lg text-sm tracking-wide"
+      >
+        Entrar
+      </button>
+
+      <!-- Divisor OU -->
+      <div class="divider flex items-center gap-3 my-5">
+        <span class="text-gray-400 text-xs">ou</span>
+      </div>
+
+      <!-- Links inferiores -->
+      <div class="flex justify-between items-center">
+        <a href="#" class="text-xs text-gray-400 hover:text-rose-500 transition-colors hover:underline">
+          Criar nova conta de profissional
+        </a>
+        <a href="#" class="text-xs text-gray-400 hover:text-rose-500 transition-colors hover:underline">
+          Login com SSO Corporativo
+        </a>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- Toast de sucesso -->
+  <div id="toast">
+    <div class="flex items-center gap-2">
+      <span>✅</span>
+      <div>
+        <p class="font-semibold text-sm">Login realizado!</p>
+        <p class="text-gray-400 text-xs">Redirecionando para o painel...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---- Dados simulados de usuários ----
+    const USUARIOS = [
+      { email: 'admin@clinica.com.br', senha: '123456', perfil: 'Administradora', nome: 'Clarissa Melo' },
+      { email: 'secretaria@clinica.com.br', senha: '123456', perfil: 'Secretária', nome: 'Ana Paula' },
+    ];
+
+    // ---- Toggle mostrar/ocultar senha ----
+    function toggleSenha() {
+      const input = document.getElementById('senhaInput');
+      const icon  = document.getElementById('eyeIcon');
+      const visivel = input.type === 'password';
+
+      input.type = visivel ? 'text' : 'password';
+
+      // Troca ícone: olho aberto / olho com risco
+      icon.innerHTML = visivel
+        ? `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+           <circle cx="12" cy="12" r="3"/>`
+        : `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+           <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+           <line x1="1" y1="1" x2="23" y2="23"/>`;
+    }
+
+    // ---- Handle Login ----
+    function handleLogin(e) {
+      e.preventDefault();
+
+      const email = document.getElementById('emailInput').value.trim();
+      const senha = document.getElementById('senhaInput').value;
+      const errorMsg = document.getElementById('errorMsg');
+
+      // Limpa estado anterior
+      errorMsg.style.display = 'none';
+      document.getElementById('emailInput').classList.remove('border-red-300');
+      document.getElementById('senhaInput').classList.remove('border-red-300');
+
+      // Validação básica
+      if (!email || !senha) {
+        errorMsg.textContent = '⚠️ Preencha e-mail e senha para continuar.';
+        errorMsg.style.display = 'block';
+        if (!email) document.getElementById('emailInput').classList.add('border-red-300');
+        if (!senha) document.getElementById('senhaInput').classList.add('border-red-300');
+        return;
+      }
+
+      // Verifica credenciais simuladas
+      const usuario = USUARIOS.find(u => u.email === email && u.senha === senha);
+
+      if (usuario) {
+        // Salva sessão simulada
+        localStorage.setItem('usuario_logado', JSON.stringify(usuario));
+
+        // Mostra toast de sucesso
+        const toast = document.getElementById('toast');
+        toast.style.display = 'block';
+
+        // Redireciona para dashboard após 1.5s
+        setTimeout(() => {
+          window.location.href = 'dashboard.html';
+        }, 1500);
+      } else {
+        // Credenciais erradas
+        errorMsg.textContent = '⚠️ E-mail ou senha incorretos. Tente novamente.';
+        errorMsg.style.display = 'block';
+        document.getElementById('emailInput').classList.add('border-red-300');
+        document.getElementById('senhaInput').classList.add('border-red-300');
+
+        // Shake animation no card
+        const card = document.querySelector('.login-card');
+        card.style.animation = 'none';
+        card.style.transform = 'translateX(6px)';
+        setTimeout(() => { card.style.transform = 'translateX(-6px)'; }, 80);
+        setTimeout(() => { card.style.transform = 'translateX(4px)'; }, 160);
+        setTimeout(() => { card.style.transform = 'translateX(0)'; }, 240);
+        card.style.transition = 'transform 0.08s ease';
+      }
+    }
+
+    // ---- Verifica se já está logado ----
+    (function() {
+      const usuario = localStorage.getItem('usuario_logado');
+      if (usuario) {
+        window.location.href = 'dashboard.html';
+      }
+    })();
+  </script>
+</body>
+</html>

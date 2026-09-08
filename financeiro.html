@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Financeiro – Nexa Clínica Integrada</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="js/auth.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { poppins: ['Poppins', 'sans-serif'] },
+          colors: {
+            primary:   { DEFAULT: '#c47a85', dark: '#b5606e', light: '#f5d5d8' },
+            sidebar:   { DEFAULT: '#2d1f22', light: '#3d2a2e' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Poppins', sans-serif; }
+    .sidebar { width: 240px; min-height: 100vh; background: #2d1f22; transition: width 0.3s; }
+    .sidebar.collapsed { width: 68px; }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .sidebar-subtitle,
+    .sidebar.collapsed .user-name,
+    .sidebar.collapsed .user-role { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; }
+    .sidebar.collapsed .logo-wrap { justify-content: center; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; border-radius: 10px; cursor: pointer;
+      transition: background 0.2s; color: #c8a5aa; font-size: 0.84rem;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(196,122,133,0.18); color: #f5d5d8; }
+    .nav-item.active { background: rgba(196,122,133,0.28); color: #f5d5d8; font-weight: 600; }
+    .nav-item svg { flex-shrink: 0; }
+
+    .kpi-card {
+      background: #fff; border-radius: 14px;
+      padding: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .chart-card {
+      background: #fff; border-radius: 14px; padding: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .table-row:hover { background: #fdf2f4; }
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-pink   { background: #fce7f3; color: #9d174d; }
+    .badge-gray   { background: #f3f4f6; color: #4b5563; }
+
+    .topbar { background: #fff; border-bottom: 1px solid #f0e6e8; }
+    .main-content { overflow-y: auto; height: 100vh; }
+
+    .tab-btn {
+      padding: 8px 18px; border-radius: 8px; font-size: 0.82rem; font-weight: 500;
+      color: #6b7280; transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: #c47a85; color: #fff; font-weight: 600;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: none; align-items: center; justify-content: center; z-index: 60;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 16px; width: 100%; max-width: 520px;
+      padding: 26px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; z-index: 50; height: 100vh; }
+      .sidebar:not(.open) { width: 0; overflow: hidden; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+      .overlay.show { display: block; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex" style="min-height:100vh;">
+
+<!-- SIDEBAR -->
+<aside class="sidebar flex flex-col" id="sidebar">
+  <div id="sidebarContent" class="flex flex-col h-full"></div>
+</aside>
+
+<!-- Mobile Overlay -->
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar sticky top-0 z-30 flex items-center justify-between px-6 py-3.5">
+    <div class="flex items-center gap-4">
+      <button onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-gray-800 font-semibold text-base">Gestão Financeira</h1>
+        <p class="text-gray-400 text-xs" id="dataAtual"></p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 cursor-pointer">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+             style="background:linear-gradient(135deg,#f5d5d8,#e8b4ba);color:#b5606e;" id="topAvatar">C</div>
+        <div class="hidden sm:block">
+          <div class="flex items-center gap-2">
+            <p class="text-gray-700 text-xs font-semibold" id="topUserName">Usuário</p>
+            <span id="perfilBadge"></span>
+          </div>
+          <p class="text-gray-400 text-xs" id="topUserRole">Perfil</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="flex-1 p-6 space-y-6">
+
+    <!-- KPI ROW -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Receitas do Mês</span>
+          <div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-gray-800" id="kpiReceitas">R$ 12.840</p>
+        <p class="text-[11px] text-emerald-600 font-medium mt-0.5">+12% vs mês anterior</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Despesas do Mês</span>
+          <div class="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center text-rose-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-gray-800" id="kpiDespesas">R$ 4.320</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">custos operacionais</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Lucro Líquido</span>
+          <div class="w-7 h-7 rounded-lg bg-pink-50 flex items-center justify-center text-rose-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-[#b5606e]" id="kpiLucro">R$ 8.520</p>
+        <p class="text-[11px] text-emerald-600 font-medium mt-0.5">Margem de 66%</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Pendentes a Receber</span>
+          <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-amber-600" id="kpiPendentes">R$ 1.050</p>
+        <p class="text-[11px] text-amber-600 font-medium mt-0.5">3 pagamentos abertos</p>
+      </div>
+    </div>
+
+    <!-- Chart: Receitas x Despesas -->
+    <div class="chart-card">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-gray-700 font-semibold text-sm">Evolução Mensal (Receitas × Despesas)</h2>
+          <p class="text-gray-400 text-xs">Acompanhamento dos últimos 6 meses</p>
+        </div>
+        <span class="badge badge-green text-xs">Ano Corrente (2026)</span>
+      </div>
+      <canvas id="chartFinanceiro" height="85"></canvas>
+    </div>
+
+    <!-- TABS & ACTIONS -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-2 bg-white p-1.5 rounded-xl shadow-sm border border-gray-100">
+        <button class="tab-btn active" onclick="setTab('receitas', this)" id="tabReceitas">
+          Receitas <span class="ml-1 text-xs opacity-80" id="cntReceitas"></span>
+        </button>
+        <button class="tab-btn" onclick="setTab('despesas', this)" id="tabDespesas">
+          Despesas <span class="ml-1 text-xs opacity-80" id="cntDespesas"></span>
+        </button>
+        <button class="tab-btn" onclick="setTab('pendentes', this)" id="tabPendentes">
+          Pendentes <span class="ml-1 text-xs opacity-80" id="cntPendentes"></span>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button data-perm="financeiro.criar" onclick="abrirModalAdicionar()"
+                class="flex items-center gap-2 bg-[#c47a85] hover:bg-[#b5606e] text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span id="btnAdicionarTexto">Nova Receita</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- TABLE SECTION -->
+    <div class="chart-card overflow-hidden">
+      <!-- RECEITAS TABLE -->
+      <div id="viewReceitas" class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-600">
+          <thead>
+            <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] pb-3">
+              <th class="py-3 px-4 font-semibold">Data</th>
+              <th class="py-3 px-4 font-semibold">Cliente</th>
+              <th class="py-3 px-4 font-semibold">Procedimento</th>
+              <th class="py-3 px-4 font-semibold">Valor</th>
+              <th class="py-3 px-4 font-semibold">Forma</th>
+              <th class="py-3 px-4 font-semibold">Status</th>
+              <th class="py-3 px-4 font-semibold text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaReceitas" class="divide-y divide-gray-50"></tbody>
+        </table>
+      </div>
+
+      <!-- DESPESAS TABLE -->
+      <div id="viewDespesas" class="hidden overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-600">
+          <thead>
+            <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] pb-3">
+              <th class="py-3 px-4 font-semibold">Data</th>
+              <th class="py-3 px-4 font-semibold">Categoria</th>
+              <th class="py-3 px-4 font-semibold">Descrição</th>
+              <th class="py-3 px-4 font-semibold">Valor</th>
+              <th class="py-3 px-4 font-semibold">Forma</th>
+              <th class="py-3 px-4 font-semibold text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaDespesas" class="divide-y divide-gray-50"></tbody>
+        </table>
+      </div>
+
+      <!-- PENDENTES TABLE -->
+      <div id="viewPendentes" class="hidden overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-600">
+          <thead>
+            <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] pb-3">
+              <th class="py-3 px-4 font-semibold">Cliente</th>
+              <th class="py-3 px-4 font-semibold">Procedimento</th>
+              <th class="py-3 px-4 font-semibold">Data de Registro</th>
+              <th class="py-3 px-4 font-semibold">Valor</th>
+              <th class="py-3 px-4 font-semibold">Atraso / Aberto</th>
+              <th class="py-3 px-4 font-semibold text-right">Ação</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaPendentes" class="divide-y divide-gray-50"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL RECEITA -->
+<div class="modal-overlay" id="modalReceita">
+  <div class="modal-box">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-sm">Adicionar Receita</h3>
+      <button onclick="fecharModalReceita()" class="text-gray-400 hover:text-gray-600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <form id="formReceita" onsubmit="salvarReceita(event)" class="mt-4 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Data *</label>
+          <input type="text" id="recData" value="08/09/2026" required class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Valor (R$) *</label>
+          <input type="number" step="0.01" id="recValor" required class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Cliente *</label>
+        <input type="text" id="recCliente" required placeholder="Nome da cliente" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Procedimento *</label>
+        <input type="text" id="recProc" required placeholder="Procedimento realizado" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Forma de Pagamento</label>
+          <select id="recForma" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg">
+            <option value="PIX">PIX</option>
+            <option value="Cartão">Cartão</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Boleto">Boleto</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
+          <select id="recStatus" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg">
+            <option value="pago">Pago</option>
+            <option value="pendente">Pendente</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="fecharModalReceita()" class="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+        <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-[#c47a85] hover:bg-[#b5606e] rounded-lg shadow-sm">Salvar Receita</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL DESPESA -->
+<div class="modal-overlay" id="modalDespesa">
+  <div class="modal-box">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-sm">Adicionar Despesa</h3>
+      <button onclick="fecharModalDespesa()" class="text-gray-400 hover:text-gray-600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <form id="formDespesa" onsubmit="salvarDespesa(event)" class="mt-4 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Data *</label>
+          <input type="text" id="despData" value="08/09/2026" required class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Valor (R$) *</label>
+          <input type="number" step="0.01" id="despValor" required class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Categoria *</label>
+        <select id="despCategoria" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg">
+          <option value="Produto">Produto</option>
+          <option value="Equipamento">Equipamento</option>
+          <option value="Aluguel">Aluguel</option>
+          <option value="Pessoal">Pessoal</option>
+          <option value="Outro">Outro</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Descrição *</label>
+        <input type="text" id="despDesc" required placeholder="Ex: Gel Redutor reposição" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Forma de Pagamento</label>
+        <select id="despForma" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg">
+          <option value="Boleto">Boleto</option>
+          <option value="PIX">PIX</option>
+          <option value="Cartão">Cartão</option>
+          <option value="Transf.">Transferência</option>
+          <option value="Dinheiro">Dinheiro</option>
+        </select>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="fecharModalDespesa()" class="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+        <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-[#c47a85] hover:bg-[#b5606e] rounded-lg shadow-sm">Salvar Despesa</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let RECEITAS = [
+  { id:1, data:'08/09/2026', cliente:'Ana Souza',      proc:'Drenagem Linfática',  valor:180,  forma:'PIX',    status:'pago' },
+  { id:2, data:'08/09/2026', cliente:'Beatriz Lima',   proc:'Limpeza de Pele',     valor:150,  forma:'Cartão', status:'pago' },
+  { id:3, data:'07/09/2026', cliente:'Diana Rocha',    proc:'Peeling Químico',     valor:200,  forma:'PIX',    status:'pago' },
+  { id:4, data:'06/09/2026', cliente:'Flávia Costa',   proc:'Redução de Medidas',  valor:220,  forma:'Dinheiro',status:'pago'},
+  { id:5, data:'05/09/2026', cliente:'Gabi Alves',     proc:'Tratamento Facial',   valor:160,  forma:'Cartão', status:'pago' },
+  { id:6, data:'04/09/2026', cliente:'Carla Ferreira', proc:'Radiofrequência',     valor:320,  forma:'PIX',    status:'pendente', dias:4 },
+  { id:7, data:'03/09/2026', cliente:'Renata Dias',    proc:'Massagem Modeladora', valor:580,  forma:'Boleto', status:'pendente', dias:5 },
+  { id:8, data:'02/09/2026', cliente:'Paula Mendes',   proc:'Drenagem Linfática',  valor:150,  forma:'PIX',    status:'pendente', dias:6 },
+];
+
+let DESPESAS = [
+  { id:1, data:'05/09/2026', categoria:'Produto',     desc:'Gel Redutor (reposição)',     valor:320,  forma:'Boleto'  },
+  { id:2, data:'03/09/2026', categoria:'Produto',     desc:'Ácido Glicólico 30%',         valor:180,  forma:'PIX'     },
+  { id:3, data:'01/09/2026', categoria:'Aluguel',     desc:'Aluguel da sala - Setembro',  valor:1800, forma:'Boleto'  },
+  { id:4, data:'01/09/2026', categoria:'Pessoal',     desc:'Pagamento secretária',        valor:1500, forma:'Transf.' },
+  { id:5, data:'28/08/2026', categoria:'Equipamento', desc:'Manutenção aparelho RF',      valor:350,  forma:'Cartão'  },
+  { id:6, data:'25/08/2026', categoria:'Outro',       desc:'Material de escritório',      valor:170,  forma:'Dinheiro'},
+];
+
+let abaAtual = 'receitas';
+
+document.addEventListener('DOMContentLoaded', () => {
+  nexaInitPage('financeiro');
+  initChart();
+  renderizar();
+});
+
+function initChart() {
+  const ctx = document.getElementById('chartFinanceiro').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: ['Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set'],
+      datasets: [
+        {
+          label: 'Receitas (R$)',
+          data: [9200, 10500, 11800, 10200, 13400, 12840],
+          borderColor: '#c47a85', backgroundColor: 'rgba(196,122,133,0.1)',
+          borderWidth: 2.5, pointBackgroundColor: '#c47a85',
+          pointRadius: 4, tension: 0.4, fill: true
+        },
+        {
+          label: 'Despesas (R$)',
+          data: [3800, 4200, 4100, 3600, 4800, 4320],
+          borderColor: '#94a3b8', backgroundColor: 'rgba(148,163,184,0.05)',
+          borderWidth: 2, pointBackgroundColor: '#94a3b8',
+          pointRadius: 4, tension: 0.4, fill: true, borderDash: [5,3]
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { font: { family:'Poppins', size:11 }, color:'#6b7280', boxWidth:12 } },
+        tooltip: { callbacks: { label: ctx => ` R$ ${ctx.parsed.y.toLocaleString('pt-BR')}` } }
+      },
+      scales: {
+        x: { grid:{ display:false }, ticks:{ font:{family:'Poppins',size:11}, color:'#9ca3af' } },
+        y: { grid:{ color:'#f3f4f6' }, ticks:{ font:{family:'Poppins',size:10}, color:'#9ca3af',
+          callback: v => 'R$ '+v.toLocaleString('pt-BR') } }
+      }
+    }
+  });
+}
+
+function renderizar() {
+  atualizarContadores();
+  renderReceitas();
+  renderDespesas();
+  renderPendentes();
+}
+
+function atualizarContadores() {
+  document.getElementById('cntReceitas').textContent = `(${RECEITAS.length})`;
+  document.getElementById('cntDespesas').textContent = `(${DESPESAS.length})`;
+  const pend = RECEITAS.filter(r => r.status === 'pendente');
+  document.getElementById('cntPendentes').textContent = `(${pend.length})`;
+}
+
+function setTab(tab, btn) {
+  abaAtual = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  document.getElementById('viewReceitas').classList.toggle('hidden', tab !== 'receitas');
+  document.getElementById('viewDespesas').classList.toggle('hidden', tab !== 'despesas');
+  document.getElementById('viewPendentes').classList.toggle('hidden', tab !== 'pendentes');
+
+  const btnTxt = document.getElementById('btnAdicionarTexto');
+  if (tab === 'receitas' || tab === 'pendentes') {
+    btnTxt.textContent = 'Nova Receita';
+  } else {
+    btnTxt.textContent = 'Nova Despesa';
+  }
+}
+
+function renderReceitas() {
+  const tbody = document.getElementById('tabelaReceitas');
+  tbody.innerHTML = '';
+  RECEITAS.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.className = 'table-row';
+    tr.innerHTML = `
+      <td class="py-3 px-4 font-mono text-[11px] text-gray-500">${r.data}</td>
+      <td class="py-3 px-4 font-medium text-gray-800">${r.cliente}</td>
+      <td class="py-3 px-4 text-gray-600">${r.proc}</td>
+      <td class="py-3 px-4 font-semibold text-gray-800">R$ ${Number(r.valor).toFixed(2).replace('.',',')}</td>
+      <td class="py-3 px-4 text-gray-500">${r.forma}</td>
+      <td class="py-3 px-4">
+        <span class="badge ${r.status === 'pago' ? 'badge-green' : 'badge-yellow'}">
+          ${r.status === 'pago' ? 'Pago' : 'Pendente'}
+        </span>
+      </td>
+      <td class="py-3 px-4 text-right">
+        <button onclick="excluirReceita(${r.id})" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderDespesas() {
+  const tbody = document.getElementById('tabelaDespesas');
+  tbody.innerHTML = '';
+
+  const catBadges = {
+    Produto: 'badge-blue',
+    Equipamento: 'badge-yellow',
+    Aluguel: 'badge-red',
+    Pessoal: 'badge-pink',
+    Outro: 'badge-gray'
+  };
+
+  DESPESAS.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.className = 'table-row';
+    tr.innerHTML = `
+      <td class="py-3 px-4 font-mono text-[11px] text-gray-500">${d.data}</td>
+      <td class="py-3 px-4"><span class="badge ${catBadges[d.categoria] || 'badge-gray'}">${d.categoria}</span></td>
+      <td class="py-3 px-4 text-gray-700 font-medium">${d.desc}</td>
+      <td class="py-3 px-4 font-semibold text-red-600">R$ ${Number(d.valor).toFixed(2).replace('.',',')}</td>
+      <td class="py-3 px-4 text-gray-500">${d.forma}</td>
+      <td class="py-3 px-4 text-right">
+        <button onclick="excluirDespesa(${d.id})" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderPendentes() {
+  const tbody = document.getElementById('tabelaPendentes');
+  tbody.innerHTML = '';
+  const pend = RECEITAS.filter(r => r.status === 'pendente');
+
+  pend.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.className = 'table-row';
+    tr.innerHTML = `
+      <td class="py-3 px-4 font-medium text-gray-800">${p.cliente}</td>
+      <td class="py-3 px-4 text-gray-600">${p.proc}</td>
+      <td class="py-3 px-4 font-mono text-[11px] text-gray-500">${p.data}</td>
+      <td class="py-3 px-4 font-semibold text-amber-600">R$ ${Number(p.valor).toFixed(2).replace('.',',')}</td>
+      <td class="py-3 px-4"><span class="badge badge-yellow">${p.dias || 3} dias em aberto</span></td>
+      <td class="py-3 px-4 text-right">
+        <button onclick="marcarComoPago(${p.id})"
+                class="px-3 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-xs font-semibold transition-colors">
+          Marcar como Pago
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function marcarComoPago(id) {
+  const r = RECEITAS.find(item => item.id === id);
+  if (r) {
+    r.status = 'pago';
+    renderizar();
+  }
+}
+
+function abrirModalAdicionar() {
+  if (abaAtual === 'despesas') {
+    document.getElementById('formDespesa').reset();
+    document.getElementById('modalDespesa').classList.add('show');
+  } else {
+    document.getElementById('formReceita').reset();
+    document.getElementById('modalReceita').classList.add('show');
+  }
+}
+
+function fecharModalReceita() { document.getElementById('modalReceita').classList.remove('show'); }
+function fecharModalDespesa() { document.getElementById('modalDespesa').classList.remove('show'); }
+
+function salvarReceita(e) {
+  e.preventDefault();
+  const data = document.getElementById('recData').value;
+  const valor = parseFloat(document.getElementById('recValor').value);
+  const cliente = document.getElementById('recCliente').value;
+  const proc = document.getElementById('recProc').value;
+  const forma = document.getElementById('recForma').value;
+  const status = document.getElementById('recStatus').value;
+
+  const novoId = RECEITAS.length ? Math.max(...RECEITAS.map(r => r.id)) + 1 : 1;
+  RECEITAS.unshift({ id: novoId, data, cliente, proc, valor, forma, status, dias: 0 });
+  fecharModalReceita();
+  renderizar();
+}
+
+function salvarDespesa(e) {
+  e.preventDefault();
+  const data = document.getElementById('despData').value;
+  const valor = parseFloat(document.getElementById('despValor').value);
+  const categoria = document.getElementById('despCategoria').value;
+  const desc = document.getElementById('despDesc').value;
+  const forma = document.getElementById('despForma').value;
+
+  const novoId = DESPESAS.length ? Math.max(...DESPESAS.map(d => d.id)) + 1 : 1;
+  DESPESAS.unshift({ id: novoId, data, categoria, desc, valor, forma });
+  fecharModalDespesa();
+  renderizar();
+}
+
+function excluirReceita(id) {
+  RECEITAS = RECEITAS.filter(r => r.id !== id);
+  renderizar();
+}
+
+function excluirDespesa(id) {
+  DESPESAS = DESPESAS.filter(d => d.id !== id);
+  renderizar();
+}
+</script>
+</body>
+</html>

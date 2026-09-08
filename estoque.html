@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Estoque – Nexa Clínica Integrada</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/auth.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { poppins: ['Poppins', 'sans-serif'] },
+          colors: {
+            primary:   { DEFAULT: '#c47a85', dark: '#b5606e', light: '#f5d5d8' },
+            sidebar:   { DEFAULT: '#2d1f22', light: '#3d2a2e' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Poppins', sans-serif; }
+    .sidebar { width: 240px; min-height: 100vh; background: #2d1f22; transition: width 0.3s; }
+    .sidebar.collapsed { width: 68px; }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .sidebar-subtitle,
+    .sidebar.collapsed .user-name,
+    .sidebar.collapsed .user-role { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; }
+    .sidebar.collapsed .logo-wrap { justify-content: center; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; border-radius: 10px; cursor: pointer;
+      transition: background 0.2s; color: #c8a5aa; font-size: 0.84rem;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(196,122,133,0.18); color: #f5d5d8; }
+    .nav-item.active { background: rgba(196,122,133,0.28); color: #f5d5d8; font-weight: 600; }
+    .nav-item svg { flex-shrink: 0; }
+
+    .kpi-card {
+      background: #fff; border-radius: 14px;
+      padding: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .chart-card {
+      background: #fff; border-radius: 14px; padding: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .table-row:hover { background: #fdf2f4; }
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-pink   { background: #fce7f3; color: #9d174d; }
+    .badge-gray   { background: #f3f4f6; color: #4b5563; }
+
+    .progress-bar { height: 6px; border-radius: 3px; background: #f3e8ea; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 3px; }
+
+    .topbar { background: #fff; border-bottom: 1px solid #f0e6e8; }
+    .main-content { overflow-y: auto; height: 100vh; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: none; align-items: center; justify-content: center; z-index: 60;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 16px; width: 100%; max-width: 500px;
+      padding: 26px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; z-index: 50; height: 100vh; }
+      .sidebar:not(.open) { width: 0; overflow: hidden; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+      .overlay.show { display: block; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex" style="min-height:100vh;">
+
+<!-- SIDEBAR -->
+<aside class="sidebar flex flex-col" id="sidebar">
+  <div id="sidebarContent" class="flex flex-col h-full"></div>
+</aside>
+
+<!-- Mobile Overlay -->
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar sticky top-0 z-30 flex items-center justify-between px-6 py-3.5">
+    <div class="flex items-center gap-4">
+      <button onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-gray-800 font-semibold text-base">Controle de Estoque & Suprimentos</h1>
+        <p class="text-gray-400 text-xs" id="dataAtual"></p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 cursor-pointer">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+             style="background:linear-gradient(135deg,#f5d5d8,#e8b4ba);color:#b5606e;" id="topAvatar">C</div>
+        <div class="hidden sm:block">
+          <div class="flex items-center gap-2">
+            <p class="text-gray-700 text-xs font-semibold" id="topUserName">Usuário</p>
+            <span id="perfilBadge"></span>
+          </div>
+          <p class="text-gray-400 text-xs" id="topUserRole">Perfil</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="flex-1 p-6 space-y-6">
+
+    <!-- READ-ONLY NOTICE FOR SECRETÁRIA -->
+    <div id="avisoSecretaria" class="hidden p-3 rounded-xl bg-blue-50 border border-blue-100 flex items-center gap-3 text-xs text-blue-700">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+      <span><strong>Modo de Visualização:</strong> Seu perfil possui acesso apenas para consulta ao estoque. Contate a administradora para incluir ou editar produtos.</span>
+    </div>
+
+    <!-- ALERT BANNERS -->
+    <div id="alertasEstoque" class="space-y-2"></div>
+
+    <!-- KPI ROW -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Total de Itens</span>
+          <div class="w-7 h-7 rounded-lg bg-pink-50 flex items-center justify-center text-rose-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-gray-800" id="kpiTotalProdutos">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">produtos cadastrados</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Estoque Regular</span>
+          <div class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-emerald-600" id="kpiEstoqueOk">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">acima do mínimo</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Em Atenção</span>
+          <div class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-amber-600" id="kpiEstoqueAtencao">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">próximo da reposição</p>
+      </div>
+
+      <div class="kpi-card">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-gray-400 text-xs">Crítico / Urgente</span>
+          <div class="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-600">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/>
+              <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl font-bold text-red-500" id="kpiEstoqueCritico">0</p>
+        <p class="text-[11px] text-gray-400 mt-0.5">abaixo da cota mínima</p>
+      </div>
+    </div>
+
+    <!-- CONTROLS ROW -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <!-- Search -->
+        <div class="relative">
+          <input type="text" id="inputBusca" oninput="filtrarProdutos()" placeholder="Buscar produto..."
+                 class="w-64 pl-9 pr-4 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:border-rose-400 bg-white shadow-sm"/>
+          <svg class="absolute left-3 top-2.5 text-gray-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </div>
+
+        <!-- Category Filter -->
+        <select id="filtroCategoria" onchange="filtrarProdutos()"
+                class="px-3 py-2 text-xs rounded-xl border border-gray-200 bg-white shadow-sm focus:outline-none focus:border-rose-400 text-gray-600">
+          <option value="">Todas as Categorias</option>
+        </select>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button data-perm="estoque.criar" onclick="abrirModalProduto()"
+                class="flex items-center gap-2 bg-[#c47a85] hover:bg-[#b5606e] text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          <span>Novo Produto</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- PRODUCTS TABLE -->
+    <div class="chart-card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-600">
+          <thead>
+            <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] pb-3">
+              <th class="py-3 px-4 font-semibold">Produto</th>
+              <th class="py-3 px-4 font-semibold">Categoria</th>
+              <th class="py-3 px-4 font-semibold">Qtd Atual / Mínima</th>
+              <th class="py-3 px-4 font-semibold">Nível do Estoque</th>
+              <th class="py-3 px-4 font-semibold">Preço Unitário</th>
+              <th class="py-3 px-4 font-semibold">Status</th>
+              <th class="py-3 px-4 font-semibold text-right" id="thAcoes">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaProdutos" class="divide-y divide-gray-50"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MOVIMENTAÇÕES HISTÓRICAS -->
+    <div class="chart-card">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-gray-700 font-semibold text-sm">Últimas Movimentações de Estoque</h2>
+          <p class="text-gray-400 text-xs">Entradas e saídas de mercadorias</p>
+        </div>
+        <span class="badge badge-pink">Auditoria de Insumos</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-600">
+          <thead>
+            <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] pb-2">
+              <th class="py-2.5 px-3 font-semibold">Data</th>
+              <th class="py-2.5 px-3 font-semibold">Produto</th>
+              <th class="py-2.5 px-3 font-semibold">Tipo</th>
+              <th class="py-2.5 px-3 font-semibold">Quantidade</th>
+              <th class="py-2.5 px-3 font-semibold">Motivo / Destino</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaMovimentacoes" class="divide-y divide-gray-50"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL NOVO / EDITAR PRODUTO -->
+<div class="modal-overlay" id="modalProduto">
+  <div class="modal-box">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-sm" id="modalProdutoTitulo">Novo Produto</h3>
+      <button onclick="fecharModalProduto()" class="text-gray-400 hover:text-gray-600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <form id="formProduto" onsubmit="salvarProduto(event)" class="mt-4 space-y-3">
+      <input type="hidden" id="produtoId"/>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Nome do Produto *</label>
+        <input type="text" id="prodNome" required placeholder="Ex: Gel Condutor 1kg"
+               class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400"/>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Categoria *</label>
+        <select id="prodCategoria" required class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400">
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Quantidade Atual *</label>
+          <input type="number" id="prodQtd" required min="0"
+                 class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400"/>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Qtd Mínima de Alerta *</label>
+          <input type="number" id="prodMinimo" required min="1"
+                 class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400"/>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Preço de Custo / Unidade (R$) *</label>
+        <input type="number" step="0.01" id="prodPreco" required
+               class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:border-rose-400"/>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="fecharModalProduto()" class="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+        <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-[#c47a85] hover:bg-[#b5606e] rounded-lg shadow-sm">Salvar Produto</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL REGISTRAR MOVIMENTAÇÃO -->
+<div class="modal-overlay" id="modalMovimento">
+  <div class="modal-box max-w-sm">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-sm">Registrar Movimentação</h3>
+      <button onclick="fecharModalMovimento()" class="text-gray-400 hover:text-gray-600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <form id="formMovimento" onsubmit="salvarMovimento(event)" class="mt-4 space-y-3">
+      <input type="hidden" id="movProdutoId"/>
+      <div>
+        <p class="text-xs text-gray-500">Produto:</p>
+        <p class="text-sm font-semibold text-gray-800" id="movProdutoNome"></p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Tipo de Movimentação</label>
+        <select id="movTipo" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg">
+          <option value="Entrada">Entrada (Compra / Reposição)</option>
+          <option value="Saída">Saída (Uso em atendimento)</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Quantidade</label>
+        <input type="number" id="movQtd" required min="1" value="1"
+               class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Motivo / Descrição</label>
+        <input type="text" id="movMotivo" required placeholder="Ex: Procedimento facial da tarde"
+               class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="fecharModalMovimento()" class="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+        <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-[#c47a85] hover:bg-[#b5606e] rounded-lg shadow-sm">Confirmar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const CATEGORIAS = ['Produto Corporal','Produto Facial','Peeling','Descartável','Equipamento'];
+
+let PRODUTOS = [
+  { id:1, nome:'Gel Redutor',               categoria:'Produto Corporal', qtd:3,  minimo:10, preco:48.90,  status:'critico' },
+  { id:2, nome:'Ácido Glicólico 30%',       categoria:'Peeling',          qtd:1,  minimo:5,  preco:89.90,  status:'critico' },
+  { id:3, nome:'Máscara Facial Hidratante', categoria:'Produto Facial',   qtd:7,  minimo:15, preco:35.00,  status:'atencao' },
+  { id:4, nome:'Creme Firmador Corporal',   categoria:'Produto Corporal', qtd:12, minimo:8,  preco:65.00,  status:'ok' },
+  { id:5, nome:'Sérum Vitamina C',          categoria:'Produto Facial',   qtd:5,  minimo:6,  preco:110.00, status:'atencao' },
+  { id:6, nome:'Luvas Descartáveis (cx)',   categoria:'Descartável',      qtd:20, minimo:5,  preco:18.00,  status:'ok' },
+  { id:7, nome:'Maca Descartável (rolo)',   categoria:'Descartável',      qtd:3,  minimo:8,  preco:25.00,  status:'critico' },
+  { id:8, nome:'Óleo de Massagem',          categoria:'Produto Corporal', qtd:15, minimo:6,  preco:42.00,  status:'ok' },
+];
+
+let MOVIMENTACOES = [
+  { data:'06/09/2026', produto:'Gel Redutor',         tipo:'Saída',   qtd:2,  motivo:'Uso em atendimento' },
+  { data:'05/09/2026', produto:'Maca Descartável',    tipo:'Saída',   qtd:5,  motivo:'Uso semanal' },
+  { data:'04/09/2026', produto:'Luvas Descartáveis',  tipo:'Entrada', qtd:10, motivo:'Reposição de estoque' },
+  { data:'03/09/2026', produto:'Creme Firmador',      tipo:'Entrada', qtd:5,  motivo:'Compra fornecedor' },
+  { data:'02/09/2026', produto:'Ácido Glicólico 30%', tipo:'Saída',   qtd:2,  motivo:'Uso em atendimento' },
+];
+
+document.addEventListener('DOMContentLoaded', () => {
+  const session = nexaInitPage('estoque');
+
+  // Preenche select de categorias
+  const fCat = document.getElementById('filtroCategoria');
+  const pCat = document.getElementById('prodCategoria');
+  CATEGORIAS.forEach(c => {
+    fCat.innerHTML += `<option value="${c}">${c}</option>`;
+    pCat.innerHTML += `<option value="${c}">${c}</option>`;
+  });
+
+  // Se secretária, mostra aviso
+  if (session && session.u && session.u.perfil === 'Secretária') {
+    document.getElementById('avisoSecretaria').classList.remove('hidden');
+    document.getElementById('thAcoes').classList.add('hidden');
+  }
+
+  renderizar();
+});
+
+function calcularStatus(qtd, min) {
+  if (qtd <= min * 0.5 || qtd <= 2) return 'critico';
+  if (qtd <= min) return 'atencao';
+  return 'ok';
+}
+
+function renderizar() {
+  atualizarKpis();
+  renderizarAlertas();
+  renderizarProdutos();
+  renderizarMovimentacoes();
+}
+
+function atualizarKpis() {
+  document.getElementById('kpiTotalProdutos').textContent = PRODUTOS.length;
+  document.getElementById('kpiEstoqueOk').textContent = PRODUTOS.filter(p => p.status === 'ok').length;
+  document.getElementById('kpiEstoqueAtencao').textContent = PRODUTOS.filter(p => p.status === 'atencao').length;
+  document.getElementById('kpiEstoqueCritico').textContent = PRODUTOS.filter(p => p.status === 'critico').length;
+}
+
+function renderizarAlertas() {
+  const container = document.getElementById('alertasEstoque');
+  container.innerHTML = '';
+  const criticos = PRODUTOS.filter(p => p.status === 'critico');
+  const atencoes = PRODUTOS.filter(p => p.status === 'atencao');
+
+  if (criticos.length > 0) {
+    container.innerHTML += `
+      <div class="p-3 rounded-xl bg-red-50 border border-red-200 flex items-center gap-3 text-xs text-red-700">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span><strong>Atenção Crítica:</strong> Existem ${criticos.length} item(ns) com estoque abaixo do mínimo de segurança (${criticos.map(c => c.nome).join(', ')}). Reposição urgente necessária.</span>
+      </div>`;
+  }
+  if (atencoes.length > 0) {
+    container.innerHTML += `
+      <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center gap-3 text-xs text-amber-800">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span><strong>Alerta Preventivo:</strong> ${atencoes.length} item(ns) próximos da margem mínima (${atencoes.map(a => a.nome).join(', ')}).</span>
+      </div>`;
+  }
+}
+
+function filtrarProdutos() {
+  renderizarProdutos();
+}
+
+function renderizarProdutos() {
+  const q = document.getElementById('inputBusca').value.toLowerCase();
+  const cFiltro = document.getElementById('filtroCategoria').value;
+  const tbody = document.getElementById('tabelaProdutos');
+  tbody.innerHTML = '';
+
+  const podeEditar = nexaPode('estoque', 'editar');
+  const podeExcluir = nexaPode('estoque', 'excluir');
+
+  const filtrados = PRODUTOS.filter(p => {
+    const matchBusca = !q || p.nome.toLowerCase().includes(q);
+    const matchCat = !cFiltro || p.categoria === cFiltro;
+    return matchBusca && matchCat;
+  });
+
+  const badgeConfig = {
+    ok:      { cls:'badge-green',  txt:'OK',      barColor:'#10b981' },
+    atencao: { cls:'badge-yellow', txt:'Atenção', barColor:'#f59e0b' },
+    critico: { cls:'badge-red',    txt:'Crítico', barColor:'#ef4444' }
+  };
+
+  filtrados.forEach(p => {
+    const cfg = badgeConfig[p.status] || badgeConfig.ok;
+    const ratio = Math.min(Math.round((p.qtd / p.minimo) * 100), 100);
+
+    const tr = document.createElement('tr');
+    tr.className = 'table-row';
+    tr.innerHTML = `
+      <td class="py-3 px-4 font-semibold text-gray-800">${p.nome}</td>
+      <td class="py-3 px-4 text-gray-500">${p.categoria}</td>
+      <td class="py-3 px-4 font-bold ${p.status === 'critico' ? 'text-red-600' : 'text-gray-700'}">
+        ${p.qtd} <span class="text-[10px] font-normal text-gray-400">/ mín: ${p.minimo}</span>
+      </td>
+      <td class="py-3 px-4 w-36">
+        <div class="flex items-center gap-2">
+          <div class="progress-bar flex-1">
+            <div class="progress-fill" style="width:${ratio}%;background:${cfg.barColor};"></div>
+          </div>
+          <span class="text-[10px] text-gray-400 font-mono">${ratio}%</span>
+        </div>
+      </td>
+      <td class="py-3 px-4 text-gray-700 font-medium">R$ ${Number(p.preco).toFixed(2).replace('.',',')}</td>
+      <td class="py-3 px-4"><span class="badge ${cfg.cls}">${cfg.txt}</span></td>
+      ${(podeEditar || podeExcluir) ? `
+      <td class="py-3 px-4 text-right">
+        <div class="flex items-center justify-end gap-1.5">
+          ${podeEditar ? `
+            <button onclick="abrirModalMovimento(${p.id})" title="Registrar Movimentação"
+                    class="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+            <button onclick="editarProduto(${p.id})" title="Editar"
+                    class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>` : ''}
+          ${podeExcluir ? `
+            <button onclick="excluirProduto(${p.id})" title="Excluir"
+                    class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>` : ''}
+        </div>
+      </td>` : ''}
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderizarMovimentacoes() {
+  const tbody = document.getElementById('tabelaMovimentacoes');
+  tbody.innerHTML = '';
+  MOVIMENTACOES.forEach(m => {
+    const isEntrada = m.tipo === 'Entrada';
+    const tr = document.createElement('tr');
+    tr.className = 'table-row';
+    tr.innerHTML = `
+      <td class="py-2.5 px-3 font-mono text-[11px] text-gray-500">${m.data}</td>
+      <td class="py-2.5 px-3 font-medium text-gray-800">${m.produto}</td>
+      <td class="py-2.5 px-3">
+        <span class="badge ${isEntrada ? 'badge-blue' : 'badge-pink'}">${m.tipo}</span>
+      </td>
+      <td class="py-2.5 px-3 font-bold ${isEntrada ? 'text-blue-600' : 'text-rose-600'}">
+        ${isEntrada ? '+' : '-'}${m.qtd}
+      </td>
+      <td class="py-2.5 px-3 text-gray-500 text-[11px]">${m.motivo}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ---- MODAL PRODUTO ----
+function abrirModalProduto() {
+  document.getElementById('formProduto').reset();
+  document.getElementById('produtoId').value = '';
+  document.getElementById('modalProdutoTitulo').textContent = 'Novo Produto';
+  document.getElementById('modalProduto').classList.add('show');
+}
+
+function editarProduto(id) {
+  const p = PRODUTOS.find(item => item.id === id);
+  if (!p) return;
+  document.getElementById('produtoId').value = p.id;
+  document.getElementById('prodNome').value = p.nome;
+  document.getElementById('prodCategoria').value = p.categoria;
+  document.getElementById('prodQtd').value = p.qtd;
+  document.getElementById('prodMinimo').value = p.minimo;
+  document.getElementById('prodPreco').value = p.preco;
+  document.getElementById('modalProdutoTitulo').textContent = 'Editar Produto';
+  document.getElementById('modalProduto').classList.add('show');
+}
+
+function fecharModalProduto() {
+  document.getElementById('modalProduto').classList.remove('show');
+}
+
+function salvarProduto(e) {
+  e.preventDefault();
+  const id = document.getElementById('produtoId').value;
+  const nome = document.getElementById('prodNome').value;
+  const categoria = document.getElementById('prodCategoria').value;
+  const qtd = parseInt(document.getElementById('prodQtd').value);
+  const minimo = parseInt(document.getElementById('prodMinimo').value);
+  const preco = parseFloat(document.getElementById('prodPreco').value);
+  const status = calcularStatus(qtd, minimo);
+
+  if (id) {
+    const idx = PRODUTOS.findIndex(p => p.id === parseInt(id));
+    if (idx !== -1) {
+      PRODUTOS[idx] = { ...PRODUTOS[idx], nome, categoria, qtd, minimo, preco, status };
+    }
+  } else {
+    const novoId = PRODUTOS.length ? Math.max(...PRODUTOS.map(p => p.id)) + 1 : 1;
+    PRODUTOS.push({ id: novoId, nome, categoria, qtd, minimo, preco, status });
+  }
+
+  fecharModalProduto();
+  renderizar();
+}
+
+function excluirProduto(id) {
+  if (confirm('Deseja realmente excluir este produto?')) {
+    PRODUTOS = PRODUTOS.filter(p => p.id !== id);
+    renderizar();
+  }
+}
+
+// ---- MOVIMENTAÇÕES ----
+function abrirModalMovimento(id) {
+  const p = PRODUTOS.find(item => item.id === id);
+  if (!p) return;
+  document.getElementById('formMovimento').reset();
+  document.getElementById('movProdutoId').value = p.id;
+  document.getElementById('movProdutoNome').textContent = `${p.nome} (Atual: ${p.qtd})`;
+  document.getElementById('modalMovimento').classList.add('show');
+}
+
+function fecharModalMovimento() {
+  document.getElementById('modalMovimento').classList.remove('show');
+}
+
+function salvarMovimento(e) {
+  e.preventDefault();
+  const prodId = parseInt(document.getElementById('movProdutoId').value);
+  const tipo = document.getElementById('movTipo').value;
+  const qtd = parseInt(document.getElementById('movQtd').value);
+  const motivo = document.getElementById('movMotivo').value;
+
+  const p = PRODUTOS.find(item => item.id === prodId);
+  if (!p) return;
+
+  if (tipo === 'Entrada') {
+    p.qtd += qtd;
+  } else {
+    if (p.qtd < qtd) {
+      alert('Quantidade em estoque insuficiente para esta saída!');
+      return;
+    }
+    p.qtd -= qtd;
+  }
+  p.status = calcularStatus(p.qtd, p.minimo);
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  MOVIMENTACOES.unshift({
+    data: hoje,
+    produto: p.nome,
+    tipo,
+    qtd,
+    motivo
+  });
+
+  fecharModalMovimento();
+  renderizar();
+}
+</script>
+</body>
+</html>

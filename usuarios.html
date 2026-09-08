@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Usuários & Permissões – Nexa Clínica Integrada</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/auth.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { poppins: ['Poppins', 'sans-serif'] },
+          colors: {
+            primary:   { DEFAULT: '#c47a85', dark: '#b5606e', light: '#f5d5d8' },
+            sidebar:   { DEFAULT: '#2d1f22', light: '#3d2a2e' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Poppins', sans-serif; }
+    .sidebar { width: 240px; min-height: 100vh; background: #2d1f22; transition: width 0.3s; }
+    .sidebar.collapsed { width: 68px; }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .sidebar-subtitle,
+    .sidebar.collapsed .user-name,
+    .sidebar.collapsed .user-role { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; }
+    .sidebar.collapsed .logo-wrap { justify-content: center; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; border-radius: 10px; cursor: pointer;
+      transition: background 0.2s; color: #c8a5aa; font-size: 0.84rem;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(196,122,133,0.18); color: #f5d5d8; }
+    .nav-item.active { background: rgba(196,122,133,0.28); color: #f5d5d8; font-weight: 600; }
+    .nav-item svg { flex-shrink: 0; }
+
+    .chart-card {
+      background: #fff; border-radius: 14px; padding: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .table-row:hover { background: #fdf2f4; }
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-pink   { background: #fce7f3; color: #9d174d; }
+
+    .topbar { background: #fff; border-bottom: 1px solid #f0e6e8; }
+    .main-content { overflow-y: auto; height: 100vh; }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: none; align-items: center; justify-content: center; z-index: 60;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 16px; width: 100%; max-width: 480px;
+      padding: 26px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; z-index: 50; height: 100vh; }
+      .sidebar:not(.open) { width: 0; overflow: hidden; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+      .overlay.show { display: block; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex" style="min-height:100vh;">
+
+<!-- SIDEBAR -->
+<aside class="sidebar flex flex-col" id="sidebar">
+  <div id="sidebarContent" class="flex flex-col h-full"></div>
+</aside>
+
+<!-- Mobile Overlay -->
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar sticky top-0 z-30 flex items-center justify-between px-6 py-3.5">
+    <div class="flex items-center gap-4">
+      <button onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-gray-800 font-semibold text-base">Usuários & Controle de Acesso</h1>
+        <p class="text-gray-400 text-xs" id="dataAtual"></p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 cursor-pointer">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+             style="background:linear-gradient(135deg,#f5d5d8,#e8b4ba);color:#b5606e;" id="topAvatar">C</div>
+        <div class="hidden sm:block">
+          <div class="flex items-center gap-2">
+            <p class="text-gray-700 text-xs font-semibold" id="topUserName">Usuário</p>
+            <span id="perfilBadge"></span>
+          </div>
+          <p class="text-gray-400 text-xs" id="topUserRole">Perfil</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="flex-1 p-6 space-y-6">
+
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-gray-700 font-semibold text-sm">Contas Cadastradas</h2>
+        <p class="text-gray-400 text-xs">Gerencie quem tem acesso ao sistema da clínica</p>
+      </div>
+      <button onclick="abrirModalUsuario()"
+              class="flex items-center gap-2 bg-[#c47a85] hover:bg-[#b5606e] text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition-all">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        <span>Novo Usuário</span>
+      </button>
+    </div>
+
+    <!-- TABELA DE USUÁRIOS -->
+    <div class="chart-card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-600">
+          <thead>
+            <tr class="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] pb-3">
+              <th class="py-3 px-4 font-semibold">Usuário</th>
+              <th class="py-3 px-4 font-semibold">E-mail</th>
+              <th class="py-3 px-4 font-semibold">Perfil de Acesso</th>
+              <th class="py-3 px-4 font-semibold">Status</th>
+              <th class="py-3 px-4 font-semibold">Último Acesso</th>
+              <th class="py-3 px-4 font-semibold text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabelaUsuarios" class="divide-y divide-gray-50"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MATRIZ DE PERMISSÕES POR PERFIL -->
+    <div class="chart-card">
+      <h3 class="font-semibold text-gray-800 text-sm mb-1">Matriz de Permissões (RBAC)</h3>
+      <p class="text-gray-400 text-xs mb-4">Níveis de visibilidade e autorização definidos na clínica</p>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-gray-600 border border-gray-100 rounded-lg">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
+              <th class="py-2.5 px-3">Módulo</th>
+              <th class="py-2.5 px-3 text-center">Administradora</th>
+              <th class="py-2.5 px-3 text-center">Secretária</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-50">
+            <tr>
+              <td class="py-2.5 px-3 font-medium text-gray-800">Dashboard</td>
+              <td class="py-2.5 px-3 text-center text-emerald-600 font-semibold">Completo (financeiro + clientes + agenda)</td>
+              <td class="py-2.5 px-3 text-center text-blue-600 font-semibold">Operacional (agenda e clientes apenas)</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium text-gray-800">Clientes</td>
+              <td class="py-2.5 px-3 text-center text-emerald-600 font-semibold">Total (Cadastrar, Editar, Excluir, Histórico)</td>
+              <td class="py-2.5 px-3 text-center text-blue-600 font-semibold">Cadastrar, Editar e Histórico (Sem excluir)</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium text-gray-800">Agendamento</td>
+              <td class="py-2.5 px-3 text-center text-emerald-600 font-semibold">Total (Criar, Alterar, Cancelar)</td>
+              <td class="py-2.5 px-3 text-center text-emerald-600 font-semibold">Total (Criar, Alterar, Cancelar)</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium text-gray-800">Financeiro</td>
+              <td class="py-2.5 px-3 text-center text-emerald-600 font-semibold">Acesso Irrestrito (Receitas, Despesas, DRE)</td>
+              <td class="py-2.5 px-3 text-center text-red-500 font-semibold">Sem Acesso (Bloqueado)</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium text-gray-800">Estoque</td>
+              <td class="py-2.5 px-3 text-center text-emerald-600 font-semibold">Total (Criar, Movimentar, Ajustar)</td>
+              <td class="py-2.5 px-3 text-center text-blue-600 font-semibold">Somente Visualização / Consulta</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium text-gray-800">Relatórios</td>
+              <td class="py-2.5 px-3 text-center text-emerald-600 font-semibold">Todos os relatórios</td>
+              <td class="py-2.5 px-3 text-center text-blue-600 font-semibold">Apenas relatório de clientes</td>
+            </tr>
+            <tr>
+              <td class="py-2.5 px-3 font-medium text-gray-800">Usuários & Config</td>
+              <td class="py-2.5 px-3 text-center text-emerald-600 font-semibold">Acesso Total</td>
+              <td class="py-2.5 px-3 text-center text-red-500 font-semibold">Sem Acesso (Bloqueado)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL USUÁRIO -->
+<div class="modal-overlay" id="modalUsuario">
+  <div class="modal-box">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+      <h3 class="font-semibold text-gray-800 text-sm">Novo Usuário</h3>
+      <button onclick="fecharModalUsuario()" class="text-gray-400 hover:text-gray-600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <form id="formUsuario" onsubmit="salvarUsuario(event)" class="mt-4 space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Nome Completo *</label>
+        <input type="text" id="usrNome" required placeholder="Ex: Julia Santos" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">E-mail de Acesso *</label>
+        <input type="email" id="usrEmail" required placeholder="julia@clinica.com.br" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Perfil de Acesso *</label>
+        <select id="usrPerfil" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg">
+          <option value="Secretária">Secretária (Operacional)</option>
+          <option value="Administradora">Administradora (Acesso Total)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Senha Inicial *</label>
+        <input type="password" id="usrSenha" required value="123456" class="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg"/>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+        <button type="button" onclick="fecharModalUsuario()" class="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+        <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-[#c47a85] hover:bg-[#b5606e] rounded-lg shadow-sm">Cadastrar Usuário</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let USUARIOS = [
+  { id: 1, nome: 'Clarissa Melo', email: 'admin@clinica.com.br', perfil: 'Administradora', status: 'ativo', ultimo: 'Agora' },
+  { id: 2, nome: 'Mariana Lima', email: 'secretaria@clinica.com.br', perfil: 'Secretária', status: 'ativo', ultimo: 'Ontem, 17:40' },
+  { id: 3, nome: 'Dra. Camila N.', email: 'camila@clinica.com.br', perfil: 'Administradora', status: 'ativo', ultimo: '05/09/2026' }
+];
+
+document.addEventListener('DOMContentLoaded', () => {
+  nexaInitPage('usuarios');
+  renderizar();
+});
+
+function renderizar() {
+  const tbody = document.getElementById('tabelaUsuarios');
+  tbody.innerHTML = '';
+
+  USUARIOS.forEach(u => {
+    const isAdm = u.perfil === 'Administradora';
+    const ini = u.nome.charAt(0).toUpperCase();
+
+    const tr = document.createElement('tr');
+    tr.className = 'table-row';
+    tr.innerHTML = `
+      <td class="py-3 px-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs"
+               style="background:${isAdm ? '#fce7f3' : '#dbeafe'};color:${isAdm ? '#9d174d' : '#1e40af'};">
+            ${ini}
+          </div>
+          <span class="font-medium text-gray-800">${u.nome}</span>
+        </div>
+      </td>
+      <td class="py-3 px-4 text-gray-500">${u.email}</td>
+      <td class="py-3 px-4">
+        <span class="badge ${isAdm ? 'badge-pink' : 'badge-blue'}">${u.perfil}</span>
+      </td>
+      <td class="py-3 px-4">
+        <span class="badge ${u.status === 'ativo' ? 'badge-green' : 'badge-red'}">${u.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>
+      </td>
+      <td class="py-3 px-4 text-gray-400 text-[11px]">${u.ultimo}</td>
+      <td class="py-3 px-4 text-right">
+        <button onclick="alternarStatus(${u.id})" class="text-xs text-gray-500 hover:text-rose-600 underline">
+          ${u.status === 'ativo' ? 'Desativar' : 'Ativar'}
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function alternarStatus(id) {
+  const u = USUARIOS.find(item => item.id === id);
+  if (u) {
+    u.status = u.status === 'ativo' ? 'inativo' : 'ativo';
+    renderizar();
+  }
+}
+
+function abrirModalUsuario() {
+  document.getElementById('formUsuario').reset();
+  document.getElementById('modalUsuario').classList.add('show');
+}
+
+function fecharModalUsuario() {
+  document.getElementById('modalUsuario').classList.remove('show');
+}
+
+function salvarUsuario(e) {
+  e.preventDefault();
+  const nome = document.getElementById('usrNome').value;
+  const email = document.getElementById('usrEmail').value;
+  const perfil = document.getElementById('usrPerfil').value;
+
+  const novoId = USUARIOS.length ? Math.max(...USUARIOS.map(u => u.id)) + 1 : 1;
+  USUARIOS.push({ id: novoId, nome, email, perfil, status: 'ativo', ultimo: 'Nunca' });
+
+  fecharModalUsuario();
+  renderizar();
+}
+</script>
+</body>
+</html>

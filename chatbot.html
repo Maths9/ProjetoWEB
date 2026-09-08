@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chatbot WhatsApp – Nexa Clínica Integrada</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/auth.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { poppins: ['Poppins', 'sans-serif'] },
+          colors: {
+            primary:   { DEFAULT: '#c47a85', dark: '#b5606e', light: '#f5d5d8' },
+            sidebar:   { DEFAULT: '#2d1f22', light: '#3d2a2e' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Poppins', sans-serif; }
+    .sidebar { width: 240px; min-height: 100vh; background: #2d1f22; transition: width 0.3s; }
+    .sidebar.collapsed { width: 68px; }
+    .sidebar.collapsed .nav-label,
+    .sidebar.collapsed .sidebar-title,
+    .sidebar.collapsed .sidebar-subtitle,
+    .sidebar.collapsed .user-name,
+    .sidebar.collapsed .user-role { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; }
+    .sidebar.collapsed .logo-wrap { justify-content: center; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; border-radius: 10px; cursor: pointer;
+      transition: background 0.2s; color: #c8a5aa; font-size: 0.84rem;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: rgba(196,122,133,0.18); color: #f5d5d8; }
+    .nav-item.active { background: rgba(196,122,133,0.28); color: #f5d5d8; font-weight: 600; }
+    .nav-item svg { flex-shrink: 0; }
+
+    .chart-card {
+      background: #fff; border-radius: 14px; padding: 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+
+    .topbar { background: #fff; border-bottom: 1px solid #f0e6e8; }
+    .main-content { overflow-y: auto; height: 100vh; }
+
+    /* Chat WhatsApp UI */
+    .chat-bubble-bot {
+      background: #ffffff; color: #374151; border-radius: 0 14px 14px 14px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08); max-width: 80%;
+    }
+    .chat-bubble-user {
+      background: #e8b4ba; color: #2d1f22; border-radius: 14px 0 14px 14px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08); max-width: 80%; margin-left: auto;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { position: fixed; z-index: 50; height: 100vh; }
+      .sidebar:not(.open) { width: 0; overflow: hidden; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 40; }
+      .overlay.show { display: block; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 flex" style="min-height:100vh;">
+
+<!-- SIDEBAR -->
+<aside class="sidebar flex flex-col" id="sidebar">
+  <div id="sidebarContent" class="flex flex-col h-full"></div>
+</aside>
+
+<!-- Mobile Overlay -->
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar sticky top-0 z-30 flex items-center justify-between px-6 py-3.5">
+    <div class="flex items-center gap-4">
+      <button onclick="toggleSidebar()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div>
+        <h1 class="text-gray-800 font-semibold text-base">Chatbot Inteligente (WhatsApp)</h1>
+        <p class="text-gray-400 text-xs" id="dataAtual"></p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 cursor-pointer">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+             style="background:linear-gradient(135deg,#f5d5d8,#e8b4ba);color:#b5606e;" id="topAvatar">C</div>
+        <div class="hidden sm:block">
+          <div class="flex items-center gap-2">
+            <p class="text-gray-700 text-xs font-semibold" id="topUserName">Usuário</p>
+            <span id="perfilBadge"></span>
+          </div>
+          <p class="text-gray-400 text-xs" id="topUserRole">Perfil</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Config & Triggers -->
+    <div class="space-y-4">
+      <div class="chart-card">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-gray-700 font-semibold text-sm">Status da Integração</h2>
+          <span class="badge badge-green">Conectado (API)</span>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">Número: <strong>+55 (11) 98765-4321</strong> (Nexa Atendimento)</p>
+
+        <div class="p-3 bg-pink-50/70 border border-pink-100 rounded-xl space-y-2 text-xs text-gray-600">
+          <p class="font-semibold text-gray-800">Recursos Ativos:</p>
+          <p>✓ Agendamento automatizado de consultas</p>
+          <p>✓ FAQ de dúvidas sobre procedimentos estéticos</p>
+          <p>✓ Envio de lembretes automáticos 24h antes</p>
+          <p>✓ Transbordo humano para a recepção</p>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3 class="text-gray-700 font-semibold text-sm mb-3">Respostas Rápidas para Teste</h3>
+        <div class="flex flex-col gap-2">
+          <button onclick="enviarMensagemSimulada('Olá! Gostaria de agendar uma massagem modeladora.')"
+                  class="text-left text-xs p-2.5 rounded-lg border border-gray-100 hover:border-rose-300 hover:bg-rose-50/40 text-gray-700 transition-all">
+            💬 "Gostaria de agendar massagem"
+          </button>
+          <button onclick="enviarMensagemSimulada('Quanto custa a limpeza de pele e quanto tempo dura?')"
+                  class="text-left text-xs p-2.5 rounded-lg border border-gray-100 hover:border-rose-300 hover:bg-rose-50/40 text-gray-700 transition-all">
+            💬 "Quanto custa a limpeza de pele?"
+          </button>
+          <button onclick="enviarMensagemSimulada('Preciso falar com a recepcionista por favor')"
+                  class="text-left text-xs p-2.5 rounded-lg border border-gray-100 hover:border-rose-300 hover:bg-rose-50/40 text-gray-700 transition-all">
+            💬 "Falar com atendente humano"
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Simulator -->
+    <div class="lg:col-span-2 chart-card flex flex-col h-[560px] p-0 overflow-hidden border border-gray-200">
+      <!-- Chat Header -->
+      <div class="p-3.5 bg-[#2d1f22] text-white flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-rose-300 flex items-center justify-center font-bold text-rose-900 text-xs">
+            🤖
+          </div>
+          <div>
+            <p class="font-semibold text-xs leading-tight">Assistente Virtual Nexa</p>
+            <p class="text-[10px] text-emerald-400">● Online | Resposta instantânea</p>
+          </div>
+        </div>
+        <button onclick="reiniciarChat()" class="text-xs text-white/60 hover:text-white underline">Reiniciar conversa</button>
+      </div>
+
+      <!-- Messages Area -->
+      <div class="flex-1 p-4 overflow-y-auto space-y-3 bg-[#fdf5f6]" id="chatMessages">
+        <div class="chat-bubble-bot p-3 text-xs leading-relaxed">
+          Olá! Bem-vinda à <strong>Nexa Clínica Integrada</strong>! ✨<br/><br/>
+          Sou a assistente virtual da clínica. Como posso te ajudar hoje?<br/>
+          1. 📅 Agendar um procedimento<br/>
+          2. 💡 Ver valores e tratamentos<br/>
+          3. 👩‍💼 Falar com a nossa recepção
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <form onsubmit="enviarMensagemForm(event)" class="p-3 bg-white border-t border-gray-100 flex items-center gap-2">
+        <input type="text" id="chatInput" placeholder="Digite uma mensagem para simular..."
+               class="flex-1 px-4 py-2.5 text-xs rounded-xl border border-gray-200 focus:outline-none focus:border-rose-400"/>
+        <button type="submit"
+                class="px-5 py-2.5 text-xs font-semibold text-white bg-[#c47a85] hover:bg-[#b5606e] rounded-xl transition-all shadow-sm">
+          Enviar
+        </button>
+      </form>
+    </div>
+
+  </main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  nexaInitPage('chatbot');
+});
+
+function enviarMensagemSimulada(texto) {
+  document.getElementById('chatInput').value = texto;
+  enviarMensagemForm(new Event('submit'));
+}
+
+function enviarMensagemForm(e) {
+  e.preventDefault();
+  const input = document.getElementById('chatInput');
+  const txt = input.value.trim();
+  if (!txt) return;
+
+  adicionarBolha(txt, 'user');
+  input.value = '';
+
+  // Processamento simulado do Bot
+  setTimeout(() => {
+    responderBot(txt);
+  }, 700);
+}
+
+function adicionarBolha(texto, autor) {
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = autor === 'user' ? 'chat-bubble-user p-3 text-xs' : 'chat-bubble-bot p-3 text-xs leading-relaxed';
+  div.innerHTML = texto;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function responderBot(mensagem) {
+  const m = mensagem.toLowerCase();
+  let resposta = '';
+
+  if (m.includes('limpeza')) {
+    resposta = 'A nossa <strong>Limpeza de Pele Profunda</strong> custa <strong>R$ 150,00</strong> e tem duração de 45 minutos. O procedimento inclui extração com vapor de ozônio e máscara calmante hidratante! Gostaria de escolher um dia para agendar?';
+  } else if (m.includes('agendar') || m.includes('massagem') || m.includes('1')) {
+    resposta = 'Temos os seguintes horários disponíveis nesta semana para você:<br/>• Terça-feira às 14:30<br/>• Quarta-feira às 09:00 ou 16:00<br/><br/>Qual deles se encaixa melhor na sua rotina?';
+  } else if (m.includes('humano') || m.includes('falar') || m.includes('recepcionista') || m.includes('3')) {
+    resposta = 'Transferindo seu atendimento para a <strong>Mariana (nossa recepcionista)</strong>. Ela responderá aqui em instantes. Por favor, aguarde um momento! 💬';
+  } else {
+    resposta = 'Entendi perfeitamente! Já anotei o seu interesse. Você pode me informar seu nome completo e melhor horário para confirmarmos seu atendimento?';
+  }
+
+  adicionarBolha(resposta, 'bot');
+}
+
+function reiniciarChat() {
+  document.getElementById('chatMessages').innerHTML = `
+    <div class="chat-bubble-bot p-3 text-xs leading-relaxed">
+      Olá! Bem-vinda à <strong>Nexa Clínica Integrada</strong>! ✨<br/><br/>
+      Sou a assistente virtual da clínica. Como posso te ajudar hoje?<br/>
+      1. 📅 Agendar um procedimento<br/>
+      2. 💡 Ver valores e tratamentos<br/>
+      3. 👩‍💼 Falar com a nossa recepção
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
