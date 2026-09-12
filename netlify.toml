@@ -1,8 +1,13 @@
-# Configuração do Netlify para o Projeto Nexa Clínica Integrada
+# Configuração do Netlify para o Projeto React + Vite (Nexa Clínica)
 
 [build]
-  # Pasta raiz que contém os arquivos estáticos
-  publish = "."
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
 
 [[headers]]
   for = "/*"
