@@ -10,10 +10,22 @@ export function Layout() {
 
   const getPageTitle = () => {
     switch (location.pathname) {
+      case '/dashboard':
+        return 'Dashboard Geral';
+      case '/clientes':
+        return 'Gerenciamento de Clientes';
       case '/agendamento':
         return 'Agenda & Procedimentos';
       case '/estoque':
         return 'Controle de Estoque & Suprimentos';
+      case '/relatorios':
+        return 'Relatórios & Atendimento';
+      case '/financeiro':
+        return 'Gestão Financeira & DRE';
+      case '/usuarios':
+        return 'Gerenciamento de Usuários & RBAC';
+      case '/chatbot':
+        return 'Chatbot WhatsApp & IA';
       default:
         return 'Nexa Clínica Integrada';
     }

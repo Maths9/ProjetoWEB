@@ -10,7 +10,7 @@ export function ProtectedRoute({ requiredModule }) {
   }
 
   if (requiredModule && !hasModule(requiredModule)) {
-    return <Navigate to="/agendamento" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;

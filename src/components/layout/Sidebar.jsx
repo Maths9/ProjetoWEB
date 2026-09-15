@@ -1,15 +1,34 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Calendar, Package, LogOut } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  Package,
+  BarChart3,
+  DollarSign,
+  ShieldCheck,
+  Bot,
+  LogOut
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export function Sidebar({ collapsed, mobileOpen, onCloseMobile }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin, hasModule } = useAuth();
   const inicial = user?.nome ? user.nome.charAt(0).toUpperCase() : 'U';
 
-  const navItems = [
+  const baseNavItems = [
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/clientes', label: 'Clientes', icon: Users },
     { to: '/agendamento', label: 'Agendamento', icon: Calendar },
     { to: '/estoque', label: 'Estoque', icon: Package },
+    { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+  ];
+
+  const adminNavItems = [
+    { to: '/financeiro', label: 'Financeiro', icon: DollarSign },
+    { to: '/usuarios', label: 'Usuários & RBAC', icon: ShieldCheck },
+    { to: '/chatbot', label: 'Chatbot IA', icon: Bot },
   ];
 
   return (
@@ -43,7 +62,9 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }) {
           {!collapsed && (
             <div className="overflow-hidden">
               <p className="text-white font-semibold text-sm leading-tight">Nexa Clínica</p>
-              <p className="text-white/40 text-xs">Área da Secretária</p>
+              <p className="text-white/40 text-xs">
+                {isAdmin ? 'Gestão Administrativa' : 'Área da Secretária'}
+              </p>
             </div>
           )}
         </div>
@@ -52,11 +73,11 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }) {
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {!collapsed && (
             <p className="text-white/30 text-[11px] font-semibold uppercase tracking-widest px-3 mb-2">
-              Módulos Ativos
+              Principal
             </p>
           )}
 
-          {navItems.map((item) => {
+          {baseNavItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -77,6 +98,38 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }) {
               </NavLink>
             );
           })}
+
+          {/* Seção Exclusiva de Administração */}
+          {isAdmin && (
+            <>
+              {!collapsed && (
+                <p className="text-white/30 text-[11px] font-semibold uppercase tracking-widest px-3 pt-4 mb-2">
+                  Administração
+                </p>
+              )}
+              {adminNavItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={onCloseMobile}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                        isActive
+                          ? 'bg-[#c47a85]/30 text-[#f5d5d8] font-semibold shadow-sm'
+                          : 'hover:bg-white/5 text-[#c8a5aa] hover:text-[#f5d5d8]'
+                      } ${collapsed ? 'justify-center' : ''}`
+                    }
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <Icon size={18} className="flex-shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </NavLink>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         {/* User Card */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, CheckCircle, ShieldCheck, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function Login() {
@@ -15,7 +15,7 @@ export function Login() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/agendamento', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -32,8 +32,8 @@ export function Login() {
     if (res.success) {
       setShowToast(true);
       setTimeout(() => {
-        navigate('/agendamento');
-      }, 900);
+        navigate('/dashboard');
+      }, 700);
     } else {
       setErrorMsg('E-mail ou senha incorretos. Tente novamente.');
     }
@@ -41,6 +41,12 @@ export function Login() {
 
   const preencherSecretaria = () => {
     setEmail('secretaria@clinica.com.br');
+    setSenha('123456');
+    setErrorMsg('');
+  };
+
+  const preencherAdmin = () => {
+    setEmail('admin@clinica.com.br');
     setSenha('123456');
     setErrorMsg('');
   };
@@ -53,7 +59,7 @@ export function Login() {
       <div className="absolute right-[12%] bottom-[10%] w-20 h-[30%] bg-[#a0b996]/30 rounded-full blur-xl pointer-events-none" />
 
       {/* Login Card */}
-      <div className="w-full max-w-md bg-white/95 backdrop-blur-md rounded-2xl p-8 shadow-[0_20px_60px_rgba(150,80,90,0.12)] border border-white/60 relative z-10">
+      <div className="w-full max-w-md bg-white/95 backdrop-blur-md rounded-3xl p-8 shadow-[0_20px_60px_rgba(150,80,90,0.12)] border border-white/60 relative z-10">
         {/* Brand Header */}
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-[#f5d5d8] to-[#e8b4ba] shadow-sm">
@@ -69,12 +75,12 @@ export function Login() {
           </div>
           <div>
             <p className="text-gray-800 font-semibold text-sm leading-tight">Nexa Clínica</p>
-            <p className="text-gray-500 text-xs">Área da Secretária</p>
+            <p className="text-gray-500 text-xs">Gestão Integrada & Estética</p>
           </div>
         </div>
 
         <h1 className="text-2xl font-bold text-gray-800 mb-1">Bem-vinda de volta</h1>
-        <p className="text-gray-400 text-xs mb-6">Acesse o sistema com suas credenciais de atendimento.</p>
+        <p className="text-gray-400 text-xs mb-6">Acesse o sistema com suas credenciais de atendimento ou gestão.</p>
 
         {errorMsg && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
@@ -94,7 +100,7 @@ export function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="secretaria@clinica.com.br"
+                placeholder="usuario@clinica.com.br"
                 className="w-full pl-10 pr-4 py-2.5 text-xs text-gray-700 border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 transition-all bg-white"
               />
             </div>
@@ -124,15 +130,26 @@ export function Login() {
           </div>
 
           {/* Quick login for demonstration */}
-          <div className="bg-pink-50/70 border border-pink-100 rounded-xl p-3 text-xs">
-            <p className="font-semibold text-gray-700 mb-1.5">⚡ Demonstração Rápida:</p>
-            <button
-              type="button"
-              onClick={preencherSecretaria}
-              className="w-full py-1.5 px-2 bg-white border border-blue-200 rounded-lg font-medium text-blue-700 hover:bg-blue-50 transition-colors text-center shadow-2xs"
-            >
-              Preencher dados da Secretária (Mariana)
-            </button>
+          <div className="bg-pink-50/70 border border-pink-100 rounded-2xl p-3 text-xs space-y-2">
+            <p className="font-semibold text-gray-700 text-[11px] uppercase tracking-wider">⚡ Acesso Rápido para Demonstração:</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={preencherSecretaria}
+                className="py-2 px-2.5 bg-white border border-rose-200 hover:border-rose-400 rounded-xl font-medium text-[#b5606e] hover:bg-rose-50/50 transition-colors text-left flex items-center gap-1.5 text-[11px] shadow-2xs"
+              >
+                <UserCheck size={14} className="flex-shrink-0" />
+                <span className="truncate">Secretária (Mariana)</span>
+              </button>
+              <button
+                type="button"
+                onClick={preencherAdmin}
+                className="py-2 px-2.5 bg-white border border-purple-200 hover:border-purple-400 rounded-xl font-medium text-purple-700 hover:bg-purple-50/50 transition-colors text-left flex items-center gap-1.5 text-[11px] shadow-2xs"
+              >
+                <ShieldCheck size={14} className="flex-shrink-0" />
+                <span className="truncate">Admin (Clarissa)</span>
+              </button>
+            </div>
           </div>
 
           <button
@@ -154,7 +171,7 @@ export function Login() {
           <CheckCircle className="text-emerald-500" size={20} />
           <div>
             <p className="font-semibold text-xs text-gray-800">Login realizado!</p>
-            <p className="text-[11px] text-gray-400">Acessando a agenda da clínica...</p>
+            <p className="text-[11px] text-gray-400">Acessando a clínica...</p>
           </div>
         </div>
       )}
