@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   TrendingUp,
@@ -13,15 +13,9 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import {
-  RECEITAS_INICIAIS,
-  DESPESAS_INICIAIS,
-  CATEGORIAS_DESPESA,
-  FORMAS_PAGAMENTO,
-} from '../data/financeiro';
 
 const FMT_BRL = (v) =>
-  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const MESES_BAR = [
   { mes: 'Abr', receita: 9200, despesa: 3800 },
@@ -34,66 +28,118 @@ const MESES_BAR = [
 const MAX_BAR = Math.max(...MESES_BAR.map((m) => m.receita));
 
 const BADGE_STATUS = {
-  recebido: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  pendente:  'bg-amber-50  text-amber-700  ring-1 ring-amber-200',
+  PAGO: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+  PENDENTE:  'bg-amber-50  text-amber-700  ring-1 ring-amber-200',
 };
 
-const emptyReceita = { data: '', cliente: '', proc: '', valor: '', forma: 'Pix', status: 'recebido' };
-const emptyDespesa = { data: '', categoria: 'Materiais', desc: '', valor: '', forma: 'Pix' };
+const CATEGORIAS_DESPESA = ['PRODUTO', 'EQUIPAMENTO', 'ALUGUEL', 'PESSOAL', 'OUTRO'];
+const FORMAS_PAGAMENTO = ['PIX', 'CARTAO', 'DINHEIRO', 'BOLETO', 'TRANSFERENCIA'];
 
 export function Financeiro() {
   const { isAdmin } = useAuth();
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
 
   const [tab, setTab] = useState('receitas');
-  const [receitas, setReceitas] = useState(RECEITAS_INICIAIS);
-  const [despesas, setDespesas] = useState(DESPESAS_INICIAIS);
+  const [receitas, setReceitas] = useState([]);
+  const [despesas, setDespesas] = useState([]);
+  const [clientesDisponiveis, setClientesDisponiveis] = useState([]);
+  const [procedimentosDisponiveis, setProcedimentosDisponiveis] = useState([]);
 
   // Modais
   const [modalReceita, setModalReceita] = useState(false);
   const [modalDespesa, setModalDespesa] = useState(false);
+
+  const emptyReceita = { data: new Date().toISOString().split('T')[0], clienteId: '', procedimentoId: '', valor: '', formaPagamento: 'PIX', status: 'PAGO' };
+  const emptyDespesa = { data: new Date().toISOString().split('T')[0], categoria: 'PRODUTO', descricao: '', valor: '', formaPagamento: 'PIX' };
+
   const [formReceita, setFormReceita] = useState(emptyReceita);
   const [formDespesa, setFormDespesa] = useState(emptyDespesa);
 
-  // KPIs
-  const totalReceitas  = receitas.filter((r) => r.status === 'recebido').reduce((s, r) => s + r.valor, 0);
-  const totalDespesas  = despesas.reduce((s, d) => s + d.valor, 0);
-  const lucro          = totalReceitas - totalDespesas;
-  const totalPendentes = receitas.filter((r) => r.status === 'pendente').reduce((s, r) => s + r.valor, 0);
+  useEffect(() => {
+    carregarTudo();
+  }, []);
 
-  const pendentes = receitas.filter((r) => r.status === 'pendente');
+  const carregarTudo = async () => {
+    try {
+      const [recRes, despRes, cliRes, procRes] = await Promise.all([
+        fetch('http://localhost:8080/api/v1/financeiro/receitas'),
+        fetch('http://localhost:8080/api/v1/financeiro/despesas'),
+        fetch('http://localhost:8080/api/v1/clientes'),
+        fetch('http://localhost:8080/api/v1/procedimentos')
+      ]);
+      if(recRes.ok) setReceitas(await recRes.json());
+      if(despRes.ok) setDespesas(await despRes.json());
+      if(cliRes.ok) setClientesDisponiveis(await cliRes.json());
+      if(procRes.ok) setProcedimentosDisponiveis(await procRes.json());
+    } catch (e) { console.error(e); }
+  };
+
+  // KPIs
+  const totalReceitas  = receitas.filter((r) => r.status === 'PAGO').reduce((s, r) => s + Number(r.valor), 0);
+  const totalDespesas  = despesas.reduce((s, d) => s + Number(d.valor), 0);
+  const lucro          = totalReceitas - totalDespesas;
+  const pendentes      = receitas.filter((r) => r.status === 'PENDENTE');
+  const totalPendentes = pendentes.reduce((s, r) => s + Number(r.valor), 0);
 
   // Salvar receita
-  const salvarReceita = () => {
-    if (!formReceita.data || !formReceita.cliente || !formReceita.proc || !formReceita.valor) return;
-    const nova = { ...formReceita, id: Date.now(), valor: parseFloat(formReceita.valor) };
-    setReceitas((p) => [nova, ...p]);
-    setModalReceita(false);
-    setFormReceita(emptyReceita);
+  const salvarReceita = async () => {
+    if (!formReceita.data || !formReceita.clienteId || !formReceita.procedimentoId || !formReceita.valor) return;
+    try {
+      await fetch('http://localhost:8080/api/v1/financeiro/receitas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formReceita,
+          cliente: { id: formReceita.clienteId },
+          procedimento: { id: formReceita.procedimentoId }
+        })
+      });
+      setModalReceita(false);
+      setFormReceita(emptyReceita);
+      carregarTudo();
+    } catch (e) { console.error(e); }
   };
 
   // Salvar despesa
-  const salvarDespesa = () => {
-    if (!formDespesa.data || !formDespesa.desc || !formDespesa.valor) return;
-    const nova = { ...formDespesa, id: Date.now(), valor: parseFloat(formDespesa.valor) };
-    setDespesas((p) => [nova, ...p]);
-    setModalDespesa(false);
-    setFormDespesa(emptyDespesa);
+  const salvarDespesa = async () => {
+    if (!formDespesa.data || !formDespesa.descricao || !formDespesa.valor) return;
+    try {
+      await fetch('http://localhost:8080/api/v1/financeiro/despesas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formDespesa)
+      });
+      setModalDespesa(false);
+      setFormDespesa(emptyDespesa);
+      carregarTudo();
+    } catch (e) { console.error(e); }
   };
 
   // Confirmar pendente
-  const confirmarPendente = (id) => {
-    setReceitas((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'recebido' } : r))
-    );
+  const confirmarPendente = async (id) => {
+    try {
+      await fetch(`http://localhost:8080/api/v1/financeiro/receitas/${id}/pagar`, { method: 'PATCH' });
+      carregarTudo();
+    } catch (e) { console.error(e); }
   };
 
   // Excluir receita/despesa
-  const excluirReceita = (id) => setReceitas((p) => p.filter((r) => r.id !== id));
-  const excluirDespesa = (id) => setDespesas((p) => p.filter((d) => d.id !== id));
+  const excluirReceita = async (id) => {
+    try {
+      await fetch(`http://localhost:8080/api/v1/financeiro/receitas/${id}`, { method: 'DELETE' });
+      carregarTudo();
+    } catch (e) { console.error(e); }
+  };
+
+  const excluirDespesa = async (id) => {
+    try {
+      await fetch(`http://localhost:8080/api/v1/financeiro/despesas/${id}`, { method: 'DELETE' });
+      carregarTudo();
+    } catch (e) { console.error(e); }
+  };
 
   const tabs = [
-    { id: 'receitas', label: 'Receitas', count: receitas.filter(r=>r.status==='recebido').length, icon: TrendingUp },
+    { id: 'receitas', label: 'Receitas', count: receitas.filter(r=>r.status==='PAGO').length, icon: TrendingUp },
     { id: 'despesas', label: 'Despesas', count: despesas.length, icon: TrendingDown },
     { id: 'pendentes', label: 'Pendentes', count: pendentes.length, icon: Clock },
   ];
@@ -226,12 +272,12 @@ export function Financeiro() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {receitas.filter(r=>r.status==='recebido').map((r) => (
+                {receitas.filter(r=>r.status==='PAGO').map((r) => (
                   <tr key={r.id} className="hover:bg-rose-50/20">
                     <td className="py-2.5 px-4 font-medium text-gray-700">{r.data}</td>
-                    <td className="py-2.5 px-4 font-medium text-gray-800">{r.cliente}</td>
-                    <td className="py-2.5 px-4 text-gray-500">{r.proc}</td>
-                    <td className="py-2.5 px-4 text-gray-500">{r.forma}</td>
+                    <td className="py-2.5 px-4 font-medium text-gray-800">{r.cliente?.nome}</td>
+                    <td className="py-2.5 px-4 text-gray-500">{r.procedimento?.nome}</td>
+                    <td className="py-2.5 px-4 text-gray-500">{r.formaPagamento}</td>
                     <td className="py-2.5 px-4 font-bold text-emerald-700 text-right">{FMT_BRL(r.valor)}</td>
                     <td className="py-2.5 px-4">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${BADGE_STATUS[r.status]}`}>
@@ -271,8 +317,8 @@ export function Financeiro() {
                     <td className="py-2.5 px-4">
                       <span className="bg-gray-100 text-gray-600 text-[10px] font-semibold px-2 py-0.5 rounded-full">{d.categoria}</span>
                     </td>
-                    <td className="py-2.5 px-4 text-gray-500">{d.desc}</td>
-                    <td className="py-2.5 px-4 text-gray-500">{d.forma}</td>
+                    <td className="py-2.5 px-4 text-gray-500">{d.descricao}</td>
+                    <td className="py-2.5 px-4 text-gray-500">{d.formaPagamento}</td>
                     <td className="py-2.5 px-4 font-bold text-red-600 text-right">{FMT_BRL(d.valor)}</td>
                     <td className="py-2.5 px-4">
                       <button onClick={() => excluirDespesa(d.id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir">
@@ -309,8 +355,8 @@ export function Financeiro() {
                   {pendentes.map((r) => (
                     <tr key={r.id} className="hover:bg-amber-50/20">
                       <td className="py-2.5 px-4 font-medium text-gray-700">{r.data}</td>
-                      <td className="py-2.5 px-4 font-medium text-gray-800">{r.cliente}</td>
-                      <td className="py-2.5 px-4 text-gray-500">{r.proc}</td>
+                      <td className="py-2.5 px-4 font-medium text-gray-800">{r.cliente?.nome}</td>
+                      <td className="py-2.5 px-4 text-gray-500">{r.procedimento?.nome}</td>
                       <td className="py-2.5 px-4 font-bold text-amber-700 text-right">{FMT_BRL(r.valor)}</td>
                       <td className="py-2.5 px-4">
                         <button
@@ -345,32 +391,64 @@ export function Financeiro() {
               </button>
             </div>
             <div className="p-5 space-y-3">
-              {[
-                { label: 'Data *', key: 'data', type: 'date' },
-                { label: 'Cliente *', key: 'cliente', type: 'text', ph: 'Nome do cliente' },
-                { label: 'Procedimento *', key: 'proc', type: 'text', ph: 'Ex: Drenagem Linfática' },
-                { label: 'Valor (R$) *', key: 'valor', type: 'number', ph: '0,00' },
-              ].map(({ label, key, type, ph }) => (
-                <div key={key}>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
-                  <input
-                    type={type}
-                    placeholder={ph}
-                    value={formReceita[key]}
-                    onChange={(e) => setFormReceita((p) => ({ ...p, [key]: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
-                  />
-                </div>
-              ))}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Data *</label>
+                <input
+                  type="date"
+                  value={formReceita.data}
+                  onChange={(e) => setFormReceita((p) => ({ ...p, data: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Cliente *</label>
+                <select
+                  value={formReceita.clienteId}
+                  onChange={(e) => setFormReceita((p) => ({ ...p, clienteId: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30 bg-white"
+                >
+                  <option value="">Selecione o cliente...</option>
+                  {clientesDisponiveis.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Procedimento *</label>
+                <select
+                  value={formReceita.procedimentoId}
+                  onChange={(e) => setFormReceita((p) => ({ ...p, procedimentoId: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30 bg-white"
+                >
+                  <option value="">Selecione o procedimento...</option>
+                  {procedimentosDisponiveis.map((proc) => (
+                    <option key={proc.id} value={proc.id}>{proc.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Valor (R$) *</label>
+                <input
+                  type="number"
+                  placeholder="0,00"
+                  value={formReceita.valor}
+                  onChange={(e) => setFormReceita((p) => ({ ...p, valor: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Forma de Pagamento</label>
                   <select
-                    value={formReceita.forma}
-                    onChange={(e) => setFormReceita((p) => ({ ...p, forma: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                    value={formReceita.formaPagamento}
+                    onChange={(e) => setFormReceita((p) => ({ ...p, formaPagamento: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30 bg-white"
                   >
-                    {FORMAS_PAGAMENTO.map((f) => <option key={f}>{f}</option>)}
+                    {FORMAS_PAGAMENTO.map((f) => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </div>
                 <div>
@@ -378,10 +456,10 @@ export function Financeiro() {
                   <select
                     value={formReceita.status}
                     onChange={(e) => setFormReceita((p) => ({ ...p, status: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30 bg-white"
                   >
-                    <option value="recebido">Recebido</option>
-                    <option value="pendente">Pendente</option>
+                    <option value="PAGO">Recebido</option>
+                    <option value="PENDENTE">Pendente</option>
                   </select>
                 </div>
               </div>
@@ -414,41 +492,57 @@ export function Financeiro() {
               </button>
             </div>
             <div className="p-5 space-y-3">
-              {[
-                { label: 'Data *', key: 'data', type: 'date' },
-                { label: 'Descrição *', key: 'desc', type: 'text', ph: 'Ex: Compra de materiais' },
-                { label: 'Valor (R$) *', key: 'valor', type: 'number', ph: '0,00' },
-              ].map(({ label, key, type, ph }) => (
-                <div key={key}>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">{label}</label>
-                  <input
-                    type={type}
-                    placeholder={ph}
-                    value={formDespesa[key]}
-                    onChange={(e) => setFormDespesa((p) => ({ ...p, [key]: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
-                  />
-                </div>
-              ))}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Data *</label>
+                <input
+                  type="date"
+                  value={formDespesa.data}
+                  onChange={(e) => setFormDespesa((p) => ({ ...p, data: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Descrição *</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Compra de materiais"
+                  value={formDespesa.descricao}
+                  onChange={(e) => setFormDespesa((p) => ({ ...p, descricao: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Valor (R$) *</label>
+                <input
+                  type="number"
+                  placeholder="0,00"
+                  value={formDespesa.valor}
+                  onChange={(e) => setFormDespesa((p) => ({ ...p, valor: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Categoria</label>
                   <select
                     value={formDespesa.categoria}
                     onChange={(e) => setFormDespesa((p) => ({ ...p, categoria: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30 bg-white"
                   >
-                    {CATEGORIAS_DESPESA.map((c) => <option key={c}>{c}</option>)}
+                    {CATEGORIAS_DESPESA.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Forma de Pagamento</label>
                   <select
-                    value={formDespesa.forma}
-                    onChange={(e) => setFormDespesa((p) => ({ ...p, forma: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30"
+                    value={formDespesa.formaPagamento}
+                    onChange={(e) => setFormDespesa((p) => ({ ...p, formaPagamento: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#c47a85]/30 bg-white"
                   >
-                    {FORMAS_PAGAMENTO.map((f) => <option key={f}>{f}</option>)}
+                    {FORMAS_PAGAMENTO.map((f) => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </div>
               </div>

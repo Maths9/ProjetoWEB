@@ -21,6 +21,7 @@ export function Sidebar({ collapsed, mobileOpen, onCloseMobile }) {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/clientes', label: 'Clientes', icon: Users },
     { to: '/agendamento', label: 'Agendamento', icon: Calendar },
+    { to: '/calendario', label: 'Calendário', icon: Calendar },
     { to: '/estoque', label: 'Estoque', icon: Package },
     { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   ];

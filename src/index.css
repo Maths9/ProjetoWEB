@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    /* Increase root font-size to scale up all rem-based sizes (fonts, margins, paddings, etc.) */
+    font-size: 115%; /* Default is 100% (16px), 115% is approx 18.4px */
+  }
   body {
     font-family: 'Poppins', sans-serif;
     background-color: #f9fafb;

@@ -15,8 +15,9 @@ import { CLIENTES_INICIAIS, HISTORICO_CLIENTES } from '../data/clientes';
 import { useAuth } from '../context/AuthContext';
 
 export function Clientes() {
-  const [clientes, setClientes] = useState(CLIENTES_INICIAIS);
-  const [abaAtiva, setAbaAtiva] = useState('todos'); // 'todos' | 'ativo' | 'potencial' | 'inativo'
+  const [clientes, setClientes] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [abaAtiva, setAbaAtiva] = useState('TODOS'); // 'TODOS' | 'ATIVO' | 'POTENCIAL' | 'INATIVO'
   const [busca, setBusca] = useState('');
 
   // Modal Novo/Editar
@@ -24,10 +25,10 @@ export function Clientes() {
   const [clienteEditando, setClienteEditando] = useState(null);
   const [formData, setFormData] = useState({
     nome: '',
-    tel: '',
+    telefone: '',
     email: '',
-    tipo: 'ativo',
-    obs: '',
+    tipo: 'ATIVO',
+    observacoes: '',
   });
 
   // Modal Histórico
@@ -39,33 +40,52 @@ export function Clientes() {
   const podeEditar = can('clientes', 'editar');
   const podeHistorico = can('clientes', 'historico');
 
+  // Buscar clientes do Backend na inicialização
+  React.useEffect(() => {
+    carregarClientes();
+  }, []);
+
+  const carregarClientes = async () => {
+    try {
+      const resposta = await fetch('http://localhost:8080/api/v1/clientes');
+      if (resposta.ok) {
+        const dados = await resposta.json();
+        setClientes(dados);
+      }
+    } catch (erro) {
+      console.error("Erro ao carregar clientes do servidor:", erro);
+    } finally {
+      setCarregando(false);
+    }
+  };
+
   // Filtros
   const clientesFiltrados = clientes.filter((c) => {
-    const matchAba = abaAtiva === 'todos' || c.tipo === abaAtiva;
+    const matchAba = abaAtiva === 'TODOS' || c.tipo === abaAtiva;
     const q = busca.toLowerCase();
     const matchBusca =
       !q ||
-      c.nome.toLowerCase().includes(q) ||
-      c.tel.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q);
+      c.nome?.toLowerCase().includes(q) ||
+      c.telefone?.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q);
     return matchAba && matchBusca;
   });
 
   // Contagens
   const countTodos = clientes.length;
-  const countAtivos = clientes.filter((c) => c.tipo === 'ativo').length;
-  const countPotenciais = clientes.filter((c) => c.tipo === 'potencial').length;
-  const countInativos = clientes.filter((c) => c.tipo === 'inativo').length;
+  const countAtivos = clientes.filter((c) => c.tipo === 'ATIVO').length;
+  const countPotenciais = clientes.filter((c) => c.tipo === 'POTENCIAL').length;
+  const countInativos = clientes.filter((c) => c.tipo === 'INATIVO').length;
 
   // Abrir modal novo
   const handleNovoCliente = () => {
     setClienteEditando(null);
     setFormData({
       nome: '',
-      tel: '',
+      telefone: '',
       email: '',
-      tipo: 'ativo',
-      obs: '',
+      tipo: 'ATIVO',
+      observacoes: '',
     });
     setModalClienteAberto(true);
   };
@@ -74,37 +94,40 @@ export function Clientes() {
   const handleEditar = (c) => {
     setClienteEditando(c.id);
     setFormData({
-      nome: c.nome,
-      tel: c.tel,
-      email: c.email,
-      tipo: c.tipo,
-      obs: c.obs || '',
+      nome: c.nome || '',
+      telefone: c.telefone || '',
+      email: c.email || '',
+      tipo: c.tipo || 'ATIVO',
+      observacoes: c.observacoes || '',
     });
     setModalClienteAberto(true);
   };
 
-  // Salvar cliente
-  const handleSalvarCliente = (e) => {
+  // Salvar cliente (Comunicação com o Backend)
+  const handleSalvarCliente = async (e) => {
     e.preventDefault();
-    if (clienteEditando) {
-      setClientes((prev) =>
-        prev.map((c) =>
-          c.id === clienteEditando ? { ...c, ...formData } : c
-        )
-      );
-    } else {
-      const novoId = clientes.length ? Math.max(...clientes.map((c) => c.id)) + 1 : 1;
-      setClientes((prev) => [
-        {
-          id: novoId,
-          ...formData,
-          ultimaVisita: '-',
-          ultimoProc: '-',
-        },
-        ...prev,
-      ]);
+    try {
+      if (clienteEditando) {
+        // Atualizar existente
+        const resposta = await fetch(`http://localhost:8080/api/v1/clientes/${clienteEditando}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        if (resposta.ok) carregarClientes();
+      } else {
+        // Criar novo
+        const resposta = await fetch('http://localhost:8080/api/v1/clientes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        if (resposta.ok) carregarClientes();
+      }
+      setModalClienteAberto(false);
+    } catch (erro) {
+      console.error("Erro ao salvar o cliente:", erro);
     }
-    setModalClienteAberto(false);
   };
 
   // Abrir modal histórico
@@ -120,10 +143,10 @@ export function Clientes() {
         {/* Tabs de Filtro */}
         <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-gray-100 shadow-2xs flex-wrap">
           {[
-            { id: 'todos', label: 'Todos', count: countTodos },
-            { id: 'ativo', label: 'Ativos', count: countAtivos },
-            { id: 'potencial', label: 'Potenciais', count: countPotenciais },
-            { id: 'inativo', label: 'Inativos', count: countInativos },
+            { id: 'TODOS', label: 'Todos', count: countTodos },
+            { id: 'ATIVO', label: 'Ativos', count: countAtivos },
+            { id: 'POTENCIAL', label: 'Potenciais', count: countPotenciais },
+            { id: 'INATIVO', label: 'Inativos', count: countInativos },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -166,6 +189,9 @@ export function Clientes() {
 
       {/* Tabela de Clientes */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+        {carregando ? (
+          <div className="p-8 text-center text-gray-400">Carregando clientes...</div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-gray-600">
             <thead>
@@ -189,9 +215,9 @@ export function Clientes() {
               ) : (
                 clientesFiltrados.map((c) => {
                   const badgeClass =
-                    c.tipo === 'ativo'
+                    c.tipo === 'ATIVO'
                       ? 'badge-green'
-                      : c.tipo === 'potencial'
+                      : c.tipo === 'POTENCIAL'
                       ? 'badge-yellow'
                       : 'badge-gray';
 
@@ -204,19 +230,19 @@ export function Clientes() {
                           </div>
                           <div>
                             <p className="font-semibold text-gray-800">{c.nome}</p>
-                            {c.obs && (
-                              <p className="text-[10px] text-gray-400 truncate max-w-xs">{c.obs}</p>
+                            {c.observacoes && (
+                              <p className="text-[10px] text-gray-400 truncate max-w-xs">{c.observacoes}</p>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-mono text-gray-600 text-[11px]">{c.tel}</td>
+                      <td className="py-3 px-4 font-mono text-gray-600 text-[11px]">{c.telefone}</td>
                       <td className="py-3 px-4 text-gray-500">{c.email}</td>
                       <td className="py-3 px-4">
                         <span className={`badge ${badgeClass} capitalize`}>{c.tipo}</span>
                       </td>
-                      <td className="py-3 px-4 text-gray-500">{c.ultimaVisita}</td>
-                      <td className="py-3 px-4 text-gray-700 font-medium">{c.ultimoProc}</td>
+                      <td className="py-3 px-4 text-gray-500">{c.ultimaVisita || '-'}</td>
+                      <td className="py-3 px-4 text-gray-700 font-medium">{c.ultimoProc || '-'}</td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {podeHistorico && (
@@ -246,6 +272,7 @@ export function Clientes() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* MODAL: NOVO / EDITAR CLIENTE */}
@@ -283,8 +310,8 @@ export function Clientes() {
                   <input
                     type="text"
                     required
-                    value={formData.tel}
-                    onChange={(e) => setFormData({ ...formData, tel: e.target.value })}
+                    value={formData.telefone}
+                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
                     placeholder="(11) 98765-4321"
                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400"
                   />
@@ -296,9 +323,9 @@ export function Clientes() {
                     onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400 bg-white"
                   >
-                    <option value="ativo">Cliente Ativo</option>
-                    <option value="potencial">Potencial (Lead)</option>
-                    <option value="inativo">Inativo</option>
+                    <option value="ATIVO">Cliente Ativo</option>
+                    <option value="POTENCIAL">Potencial (Lead)</option>
+                    <option value="INATIVO">Inativo</option>
                   </select>
                 </div>
               </div>
@@ -318,8 +345,8 @@ export function Clientes() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Observações e Preferências</label>
                 <textarea
                   rows={3}
-                  value={formData.obs}
-                  onChange={(e) => setFormData({ ...formData, obs: e.target.value })}
+                  value={formData.observacoes}
+                  onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
                   placeholder="Alergias, preferências de horário, tratamentos anteriores..."
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400"
                 />

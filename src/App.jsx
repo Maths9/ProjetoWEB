@@ -12,6 +12,7 @@ import { Relatorios } from './pages/Relatorios';
 import { Financeiro } from './pages/Financeiro';
 import { Usuarios } from './pages/Usuarios';
 import { Chatbot } from './pages/Chatbot';
+import Calendario from './pages/Calendario';
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/financeiro" element={<Financeiro />} />
               <Route path="/usuarios" element={<Usuarios />} />
               <Route path="/chatbot" element={<Chatbot />} />
+              <Route path="/calendario" element={<Calendario />} />
             </Route>
           </Route>
 

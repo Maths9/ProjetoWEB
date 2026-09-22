@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar as CalendarIcon,
   CheckCircle,
@@ -12,35 +12,61 @@ import {
   User,
   Sparkles
 } from 'lucide-react';
-import {
-  AGENDAMENTOS_INICIAIS,
-  PROCEDIMENTOS,
-  CLIENTES_NOMES
-} from '../data/agendamentos';
+import Calendario from './Calendario';
 
 export function Agendamento() {
-  const [agendamentos, setAgendamentos] = useState(AGENDAMENTOS_INICIAIS);
-  const [dataSelecionada, setDataSelecionada] = useState('2026-09-12');
-  const [visualizacao, setVisualizacao] = useState('lista'); // 'lista' | 'semanal' | 'mensal'
+  const [agendamentos, setAgendamentos] = useState([]);
+  const [clientesDisponiveis, setClientesDisponiveis] = useState([]);
+  const [procedimentosDisponiveis, setProcedimentosDisponiveis] = useState([]);
+  const [dataSelecionada, setDataSelecionada] = useState(new Date().toISOString().split('T')[0]);
+  const [visualizacao, setVisualizacao] = useState('lista');
 
   // Modal State
   const [modalAberto, setModalAberto] = useState(false);
   const [agendamentoEditando, setAgendamentoEditando] = useState(null);
   const [formData, setFormData] = useState({
-    data: '2026-09-12',
+    data: new Date().toISOString().split('T')[0],
     hora: '09:00',
-    cliente: '',
-    proc: '',
-    duracao: 60,
+    clienteId: '',
+    procedimentoId: '',
+    duracaoMin: 60,
     valor: 180,
   });
+
+  // Carregar dados da API
+  useEffect(() => {
+    carregarAgendamentos();
+    carregarClientes();
+    carregarProcedimentos();
+  }, []);
+
+  const carregarAgendamentos = async () => {
+    try {
+      const res = await fetch('http://localhost:8080/api/v1/agendamentos');
+      if (res.ok) setAgendamentos(await res.json());
+    } catch (e) { console.error(e); }
+  };
+
+  const carregarClientes = async () => {
+    try {
+      const res = await fetch('http://localhost:8080/api/v1/clientes');
+      if (res.ok) setClientesDisponiveis(await res.json());
+    } catch (e) { console.error(e); }
+  };
+
+  const carregarProcedimentos = async () => {
+    try {
+      const res = await fetch('http://localhost:8080/api/v1/procedimentos');
+      if (res.ok) setProcedimentosDisponiveis(await res.json());
+    } catch (e) { console.error(e); }
+  };
 
   // KPIs calculados com base no dia selecionado
   const agendamentosDoDia = agendamentos.filter((a) => a.data === dataSelecionada);
   const totalDia = agendamentosDoDia.length;
-  const confirmadosDia = agendamentosDoDia.filter((a) => a.status === 'confirmado').length;
-  const aguardandoDia = agendamentosDoDia.filter((a) => a.status === 'aguardando').length;
-  const canceladosDia = agendamentosDoDia.filter((a) => a.status === 'cancelado').length;
+  const confirmadosDia = agendamentosDoDia.filter((a) => a.status === 'CONFIRMADO').length;
+  const aguardandoDia = agendamentosDoDia.filter((a) => a.status === 'AGUARDANDO').length;
+  const canceladosDia = agendamentosDoDia.filter((a) => a.status === 'CANCELADO').length;
 
   // Navegação de datas
   const mudarData = (dias) => {
@@ -50,14 +76,15 @@ export function Agendamento() {
   };
 
   const irParaHoje = () => {
-    setDataSelecionada('2026-09-12');
+    setDataSelecionada(new Date().toISOString().split('T')[0]);
   };
 
   // Ações de status
-  const atualizarStatus = (id, novoStatus) => {
-    setAgendamentos((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: novoStatus } : a))
-    );
+  const atualizarStatus = async (id, novoStatus) => {
+    try {
+      await fetch(`http://localhost:8080/api/v1/agendamentos/${id}/status?status=${novoStatus}`, { method: 'PATCH' });
+      carregarAgendamentos();
+    } catch (e) { console.error(e); }
   };
 
   // Abrir modal novo
@@ -66,10 +93,10 @@ export function Agendamento() {
     setFormData({
       data: dataSelecionada,
       hora: '09:00',
-      cliente: CLIENTES_NOMES[0] || '',
-      proc: PROCEDIMENTOS[0]?.nome || '',
-      duracao: PROCEDIMENTOS[0]?.dur || 60,
-      valor: PROCEDIMENTOS[0]?.preco || 180,
+      clienteId: clientesDisponiveis[0]?.id || '',
+      procedimentoId: procedimentosDisponiveis[0]?.id || '',
+      duracaoMin: procedimentosDisponiveis[0]?.duracaoMin || 60,
+      valor: procedimentosDisponiveis[0]?.valor || 180,
     });
     setModalAberto(true);
   };
@@ -80,50 +107,54 @@ export function Agendamento() {
     setFormData({
       data: agendamento.data,
       hora: agendamento.hora,
-      cliente: agendamento.cliente,
-      proc: agendamento.proc,
-      duracao: agendamento.duracao,
+      clienteId: agendamento.clienteId,
+      procedimentoId: agendamento.procedimentoId,
+      duracaoMin: agendamento.duracaoMin,
       valor: agendamento.valor,
     });
     setModalAberto(true);
   };
 
   // Procedimento change
-  const handleProcedimentoChange = (nomeProc) => {
-    const p = PROCEDIMENTOS.find((item) => item.nome === nomeProc);
+  const handleProcedimentoChange = (id) => {
+    const p = procedimentosDisponiveis.find((item) => item.id.toString() === id.toString());
     setFormData((prev) => ({
       ...prev,
-      proc: nomeProc,
-      duracao: p ? p.dur : prev.duracao,
-      valor: p ? p.preco : prev.valor,
+      procedimentoId: id,
+      duracaoMin: p ? p.duracaoMin : prev.duracaoMin,
+      valor: p ? p.valor : prev.valor,
     }));
   };
 
   // Salvar agendamento
-  const handleSalvar = (e) => {
+  const handleSalvar = async (e) => {
     e.preventDefault();
-    if (agendamentoEditando) {
-      setAgendamentos((prev) =>
-        prev.map((a) =>
-          a.id === agendamentoEditando
-            ? { ...a, ...formData, duracao: Number(formData.duracao), valor: Number(formData.valor) }
-            : a
-        )
-      );
-    } else {
-      const novoId = agendamentos.length ? Math.max(...agendamentos.map((a) => a.id)) + 1 : 1;
-      setAgendamentos((prev) => [
-        ...prev,
-        {
-          id: novoId,
-          ...formData,
-          duracao: Number(formData.duracao),
-          valor: Number(formData.valor),
-          status: 'confirmado',
-        },
-      ]);
+    try {
+      const payload = {
+        ...formData,
+        cliente: { id: formData.clienteId },
+        procedimento: { id: formData.procedimentoId }
+      };
+
+      if (agendamentoEditando) {
+        // Mocking PUT since AgendamentoController might not have PUT. Usually we POST to save/update
+        await fetch(`http://localhost:8080/api/v1/agendamentos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: agendamentoEditando, ...payload })
+        });
+      } else {
+        await fetch('http://localhost:8080/api/v1/agendamentos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, status: 'CONFIRMADO' })
+        });
+      }
+      setModalAberto(false);
+      carregarAgendamentos();
+    } catch (e) {
+      console.error(e);
     }
-    setModalAberto(false);
   };
 
   return (
@@ -218,7 +249,7 @@ export function Agendamento() {
         {/* View Switcher & Action */}
         <div className="flex items-center gap-3">
           <div className="flex items-center bg-white p-1 rounded-xl border border-gray-100 shadow-2xs">
-            {['lista', 'semanal', 'mensal'].map((modo) => (
+            {['lista', 'semanal', 'calendario', 'mensal'].map((modo) => (
               <button
                 key={modo}
                 onClick={() => setVisualizacao(modo)}
@@ -281,13 +312,13 @@ export function Agendamento() {
                           <td className="py-3 px-4 font-medium text-gray-800">
                             <div className="flex items-center gap-2">
                               <div className="w-6 h-6 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-[10px]">
-                                {item.cliente.charAt(0)}
+                                {item.cliente?.nome?.charAt(0) || '?'}
                               </div>
-                              <span>{item.cliente}</span>
+                              <span>{item.cliente?.nome}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-gray-600">{item.proc}</td>
-                          <td className="py-3 px-4 text-gray-400">{item.duracao} min</td>
+                          <td className="py-3 px-4 text-gray-600">{item.procedimento?.nome}</td>
+                          <td className="py-3 px-4 text-gray-400">{item.duracaoMin} min</td>
                           <td className="py-3 px-4 font-semibold text-gray-700">
                             R$ {Number(item.valor).toFixed(2).replace('.', ',')}
                           </td>
@@ -298,9 +329,9 @@ export function Agendamento() {
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {item.status !== 'confirmado' && (
+                              {item.status !== 'CONFIRMADO' && (
                                 <button
-                                  onClick={() => atualizarStatus(item.id, 'confirmado')}
+                                  onClick={() => atualizarStatus(item.id, 'CONFIRMADO')}
                                   title="Confirmar Presença"
                                   className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                                 >
@@ -314,9 +345,9 @@ export function Agendamento() {
                               >
                                 <Edit2 size={15} />
                               </button>
-                              {item.status !== 'cancelado' && (
+                              {item.status !== 'CANCELADO' && (
                                 <button
-                                  onClick={() => atualizarStatus(item.id, 'cancelado')}
+                                  onClick={() => atualizarStatus(item.id, 'CANCELADO')}
                                   title="Cancelar Atendimento"
                                   className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 >
@@ -334,6 +365,106 @@ export function Agendamento() {
           </div>
         </div>
       )}
+
+      {/* VIEW: CALENDARIO - combined list and calendar */}
+      {visualizacao === 'calendario' && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="p-4">
+            {/* List view (same as lista) */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-gray-600">
+                <thead>
+                  <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] bg-gray-50/50">
+                    <th className="py-3 px-4 font-semibold">Horário</th>
+                    <th className="py-3 px-4 font-semibold">Cliente</th>
+                    <th className="py-3 px-4 font-semibold">Procedimento</th>
+                    <th className="py-3 px-4 font-semibold">Duração</th>
+                    <th className="py-3 px-4 font-semibold">Valor</th>
+                    <th className="py-3 px-4 font-semibold">Status</th>
+                    <th className="py-3 px-4 font-semibold text-right">Ações Rápidas</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {agendamentosDoDia.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-gray-400">
+                        Nenhum agendamento encontrado para esta data.
+                      </td>
+                    </tr>
+                  ) : (
+                    agendamentosDoDia
+                      .sort((a, b) => a.hora.localeCompare(b.hora))
+                      .map((item) => {
+                        const badgeClasses = {
+                          confirmado: 'badge-green',
+                          aguardando: 'badge-yellow',
+                          cancelado: 'badge-red',
+                        };
+                        return (
+                          <tr key={item.id} className="hover:bg-rose-50/30 transition-colors">
+                            <td className="py-3 px-4 font-bold text-gray-800">{item.hora}</td>
+                            <td className="py-3 px-4 font-medium text-gray-800">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-[10px]">
+                                  {item.cliente?.nome?.charAt(0) || '?'}
+                                </div>
+                                <span>{item.cliente?.nome}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-gray-600">{item.procedimento?.nome}</td>
+                            <td className="py-3 px-4 text-gray-400">{item.duracaoMin} min</td>
+                            <td className="py-3 px-4 font-semibold text-gray-700">
+                              R$ {Number(item.valor).toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`badge ${badgeClasses[item.status] || 'badge-gray'} capitalize`}>{item.status}</span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {item.status !== 'CONFIRMADO' && (
+                                  <button
+                                    onClick={() => atualizarStatus(item.id, 'CONFIRMADO')}
+                                    title="Confirmar Presença"
+                                    className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                  >
+                                    <CheckCircle size={15} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleEditar(item)}
+                                  title="Editar Agendamento"
+                                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                                {item.status !== 'CANCELADO' && (
+                                  <button
+                                    onClick={() => atualizarStatus(item.id, 'CANCELADO')}
+                                    title="Cancelar Atendimento"
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  >
+                                    <XCircle size={15} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {/* Calendar below */}
+            <div className="mt-6">
+              <Calendario agendamentos={agendamentos} setAgendamentos={setAgendamentos} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: SEMANAL */}
+
 
       {/* VIEW: SEMANAL */}
       {visualizacao === 'semanal' && (
@@ -369,8 +500,8 @@ export function Agendamento() {
                           key={it.id}
                           className="p-2 rounded-lg bg-white border border-rose-100 text-[11px] shadow-2xs"
                         >
-                          <div className="font-bold text-gray-800">{it.hora} - {it.cliente}</div>
-                          <div className="text-gray-500 truncate">{it.proc}</div>
+                          <div className="font-bold text-gray-800">{it.hora} - {it.cliente?.nome}</div>
+                          <div className="text-gray-500 truncate">{it.procedimento?.nome}</div>
                         </div>
                       ))
                     )}
@@ -467,14 +598,14 @@ export function Agendamento() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Cliente *</label>
                 <select
                   required
-                  value={formData.cliente}
-                  onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+                  value={formData.clienteId}
+                  onChange={(e) => setFormData({ ...formData, clienteId: e.target.value })}
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400 bg-white"
                 >
-                  <option value="">Selecione a cliente...</option>
-                  {CLIENTES_NOMES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                  <option value="">Selecione o cliente...</option>
+                  {clientesDisponiveis.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
                     </option>
                   ))}
                 </select>
@@ -484,13 +615,13 @@ export function Agendamento() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Procedimento *</label>
                 <select
                   required
-                  value={formData.proc}
+                  value={formData.procedimentoId}
                   onChange={(e) => handleProcedimentoChange(e.target.value)}
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400 bg-white"
                 >
                   <option value="">Selecione o procedimento...</option>
-                  {PROCEDIMENTOS.map((p) => (
-                    <option key={p.nome} value={p.nome}>
+                  {procedimentosDisponiveis.map((p) => (
+                    <option key={p.id} value={p.id}>
                       {p.nome}
                     </option>
                   ))}
@@ -502,8 +633,8 @@ export function Agendamento() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Duração (min)</label>
                   <input
                     type="number"
-                    value={formData.duracao}
-                    onChange={(e) => setFormData({ ...formData, duracao: e.target.value })}
+                    value={formData.duracaoMin}
+                    onChange={(e) => setFormData({ ...formData, duracaoMin: e.target.value })}
                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400"
                   />
                 </div>
