@@ -13,9 +13,41 @@ export function AuthProvider({ children }) {
     }
   });
 
-  const login = (email, senha) => {
+  const login = async (email, senha) => {
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/usuarios/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, senha })
+      });
+
+      if (response.ok) {
+        const usuario = await response.json();
+        const usuarioFormatado = {
+          id: usuario.id,
+          nome: usuario.nome,
+          email: usuario.email,
+          perfil: usuario.role === 'ADMIN' ? 'Administradora' : 'Secretária',
+          cargo: usuario.role === 'ADMIN' ? 'Diretora Clínica' : 'Recepcionista Pleno'
+        };
+        setUser(usuarioFormatado);
+        localStorage.setItem('usuario_logado', JSON.stringify(usuarioFormatado));
+        return { success: true, user: usuarioFormatado };
+      }
+
+      if (response.status === 403) {
+        return { success: false, error: 'Usuário desativado pela administração.' };
+      }
+      if (response.status === 401) {
+        return { success: false, error: 'E-mail ou senha inválidos.' };
+      }
+    } catch (err) {
+      console.warn('Backend indisponível para login, tentando base local simulada:', err);
+    }
+
+    // Fallback simulado caso o backend não esteja ativo
     const encontrado = USUARIOS_SIMULADOS.find(
-      (u) => u.email === email && u.senha === senha
+      (u) => u.email.toLowerCase() === email.toLowerCase() && u.senha === senha
     );
 
     if (encontrado) {
@@ -24,7 +56,7 @@ export function AuthProvider({ children }) {
       return { success: true, user: encontrado };
     }
 
-    return { success: false, error: 'E-mail ou senha inválidos' };
+    return { success: false, error: 'E-mail ou senha inválidos.' };
   };
 
   const logout = () => {

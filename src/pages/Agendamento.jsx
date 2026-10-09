@@ -10,7 +10,8 @@ import {
   Edit2,
   X,
   User,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import Calendario from './Calendario';
 
@@ -107,12 +108,28 @@ export function Agendamento() {
     setFormData({
       data: agendamento.data,
       hora: agendamento.hora,
-      clienteId: agendamento.clienteId,
-      procedimentoId: agendamento.procedimentoId,
+      clienteId: agendamento.cliente?.id || agendamento.clienteId,
+      procedimentoId: agendamento.procedimento?.id || agendamento.procedimentoId,
       duracaoMin: agendamento.duracaoMin,
       valor: agendamento.valor,
     });
     setModalAberto(true);
+  };
+
+  const handleExcluirAgendamento = async (id) => {
+    if (!confirm('Deseja realmente excluir este agendamento criado por engano?')) return;
+    try {
+      const res = await fetch(`http://localhost:8080/api/v1/agendamentos/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        carregarAgendamentos();
+      } else {
+        alert('Não foi possível excluir o agendamento.');
+      }
+    } catch (e) {
+      console.error('Erro ao excluir agendamento:', e);
+    }
   };
 
   // Procedimento change
@@ -354,6 +371,13 @@ export function Agendamento() {
                                   <XCircle size={15} />
                                 </button>
                               )}
+                              <button
+                                onClick={() => handleExcluirAgendamento(item.id)}
+                                title="Excluir Agendamento (Criado por engano)"
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={15} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -446,6 +470,13 @@ export function Agendamento() {
                                     <XCircle size={15} />
                                   </button>
                                 )}
+                                <button
+                                  onClick={() => handleExcluirAgendamento(item.id)}
+                                  title="Excluir Agendamento (Criado por engano)"
+                                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
                               </div>
                             </td>
                           </tr>
