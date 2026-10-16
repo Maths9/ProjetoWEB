@@ -36,7 +36,7 @@ export default function App() {
               <Route path="/financeiro" element={<Financeiro />} />
               <Route path="/usuarios" element={<Usuarios />} />
               <Route path="/chatbot" element={<Chatbot />} />
-              <Route path="/calendario" element={<Calendario />} />
+              <Route path="/calendario" element={<Navigate to="/agendamento" replace />} />
             </Route>
           </Route>
 

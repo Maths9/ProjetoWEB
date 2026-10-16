@@ -43,6 +43,18 @@ public class AgendamentoService {
     }
 
     public Agendamento salvar(Agendamento agendamento) {
+        // Impede agendamentos novos no passado
+        if (agendamento.getId() == null && agendamento.getData() != null && agendamento.getHora() != null) {
+            LocalDate hoje = LocalDate.now();
+            if (agendamento.getData().isBefore(hoje)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Não é possível criar agendamento em datas que já passaram.");
+            }
+            if (agendamento.getData().isEqual(hoje) && agendamento.getHora().isBefore(java.time.LocalTime.now())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Não é possível criar agendamento em horário que já passou hoje.");
+            }
+        }
         return agendamentoRepository.save(agendamento);
     }
 
