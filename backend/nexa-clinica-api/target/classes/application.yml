@@ -20,6 +20,10 @@ spring:
     locations: classpath:db/migration
     validate-on-migrate: false
     baseline-on-migrate: true
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
+      write-dates-as-timestamps: false
 
 springdoc:
   swagger-ui:

@@ -1,5 +1,6 @@
 package com.nexaclinica.api.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.nexaclinica.api.entity.enums.TipoMovimentacao;
 import jakarta.persistence.*;
 import lombok.*;
@@ -32,7 +33,8 @@ public class MovimentacaoEstoque {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "produto_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "movimentacoes"})
     private Produto produto;
 }

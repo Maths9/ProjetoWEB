@@ -2,9 +2,9 @@ export const NEXA_PERFIS = {
   'Secretária': {
     modulos: ['dashboard', 'clientes', 'agendamento', 'estoque', 'relatorios'],
     dashboard: { financeiro: false, estoque: true, conversao: false },
-    clientes: { criar: true, editar: true, excluir: false, historico: true },
+    clientes: { criar: true, editar: true, excluir: true, historico: true },
     agendamento: { criar: true, editar: true, cancelar: true },
-    estoque: { criar: false, editar: false, excluir: false }, // Consulta / leitura apenas
+    estoque: { criar: true, editar: true, movimentar: true, excluir: false }, // Pode consultar, cadastrar e movimentar estoque
     relatorios: { financeiro: false, estoque: false, clientes: true, desempenho: false },
   },
   'Administradora': {

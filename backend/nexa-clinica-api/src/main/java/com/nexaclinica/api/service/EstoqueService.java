@@ -5,6 +5,7 @@ import com.nexaclinica.api.entity.Produto;
 import com.nexaclinica.api.entity.enums.TipoMovimentacao;
 import com.nexaclinica.api.repository.MovimentacaoEstoqueRepository;
 import com.nexaclinica.api.repository.ProdutoRepository;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +49,9 @@ public class EstoqueService {
     public Produto atualizarProduto(Long id, Produto dados) {
         Produto produto = buscarProdutoPorId(id);
         produto.setNome(dados.getNome());
+        if (dados.getQuantidade() != null) {
+            produto.setQuantidade(dados.getQuantidade());
+        }
         produto.setEstoqueMinimo(dados.getEstoqueMinimo());
         produto.setPrecoCusto(dados.getPrecoCusto());
         return produtoRepository.save(produto);
@@ -82,7 +86,7 @@ public class EstoqueService {
     }
 
     public List<MovimentacaoEstoque> listarTodasMovimentacoes() {
-        return movimentacaoEstoqueRepository.findAll();
+        return movimentacaoEstoqueRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
     }
 
     public void deletarProduto(Long id) {
