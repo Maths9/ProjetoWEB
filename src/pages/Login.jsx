@@ -19,7 +19,7 @@ export function Login() {
     }
   }, [isAuthenticated, navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -28,26 +28,26 @@ export function Login() {
       return;
     }
 
-    const res = login(email, senha);
+    const res = await login(email, senha);
     if (res.success) {
       setShowToast(true);
       setTimeout(() => {
         navigate('/dashboard');
       }, 700);
     } else {
-      setErrorMsg('E-mail ou senha incorretos. Tente novamente.');
+      setErrorMsg(res.error || 'E-mail ou senha incorretos. Tente novamente.');
     }
   };
 
   const preencherSecretaria = () => {
-    setEmail('secretaria@clinica.com.br');
-    setSenha('123456');
+    setEmail('mariana@clinica.com.br');
+    setSenha('secretaria123');
     setErrorMsg('');
   };
 
   const preencherAdmin = () => {
-    setEmail('admin@clinica.com.br');
-    setSenha('123456');
+    setEmail('clarissa@clinica.com.br');
+    setSenha('admin123');
     setErrorMsg('');
   };
 

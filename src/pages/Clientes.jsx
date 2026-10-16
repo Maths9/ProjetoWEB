@@ -9,9 +9,10 @@ import {
   Mail,
   UserCheck,
   Calendar,
-  Sparkles
+  Sparkles,
+  Trash2,
+  FileText
 } from 'lucide-react';
-import { CLIENTES_INICIAIS, HISTORICO_CLIENTES } from '../data/clientes';
 import { useAuth } from '../context/AuthContext';
 
 export function Clientes() {
@@ -34,15 +35,43 @@ export function Clientes() {
   // Modal Histórico
   const [modalHistoricoAberto, setModalHistoricoAberto] = useState(false);
   const [clienteSelecionadoHistorico, setClienteSelecionadoHistorico] = useState(null);
+  const [historicoAtendimentos, setHistoricoAtendimentos] = useState([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  const [procedimentos, setProcedimentos] = useState([]);
+  const [mostrarFormNovoHistorico, setMostrarFormNovoHistorico] = useState(false);
+  const [formNovoHistorico, setFormNovoHistorico] = useState({
+    data: new Date().toISOString().split('T')[0],
+    procedimentoId: '',
+    valor: '',
+    observacoes: '',
+  });
 
-  const { can } = useAuth();
+  const { can, isAdmin } = useAuth();
   const podeCriar = can('clientes', 'criar');
   const podeEditar = can('clientes', 'editar');
   const podeHistorico = can('clientes', 'historico');
+  const podeExcluir = can('clientes', 'excluir') || isAdmin;
+
+  const handleExcluirCliente = async (c) => {
+    if (!confirm(`Deseja realmente excluir o paciente "${c.nome}"? Esta ação removerá também o histórico e consultas associadas.`)) return;
+    try {
+      const res = await fetch(`http://localhost:8080/api/v1/clientes/${c.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        carregarClientes();
+      } else {
+        alert('Não foi possível excluir o paciente.');
+      }
+    } catch (e) {
+      console.error('Erro ao excluir cliente:', e);
+    }
+  };
 
   // Buscar clientes do Backend na inicialização
   React.useEffect(() => {
     carregarClientes();
+    carregarProcedimentos();
   }, []);
 
   const carregarClientes = async () => {
@@ -56,6 +85,33 @@ export function Clientes() {
       console.error("Erro ao carregar clientes do servidor:", erro);
     } finally {
       setCarregando(false);
+    }
+  };
+
+  const carregarProcedimentos = async () => {
+    try {
+      const res = await fetch('http://localhost:8080/api/v1/procedimentos');
+      if (res.ok) {
+        const dados = await res.json();
+        setProcedimentos(dados);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar procedimentos:", e);
+    }
+  };
+
+  const carregarHistorico = async (clienteId) => {
+    setCarregandoHistorico(true);
+    try {
+      const res = await fetch(`http://localhost:8080/api/v1/historicos/cliente/${clienteId}`);
+      if (res.ok) {
+        const dados = await res.json();
+        setHistoricoAtendimentos(dados);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar histórico:", e);
+    } finally {
+      setCarregandoHistorico(false);
     }
   };
 
@@ -133,7 +189,70 @@ export function Clientes() {
   // Abrir modal histórico
   const handleVerHistorico = (c) => {
     setClienteSelecionadoHistorico(c);
+    setMostrarFormNovoHistorico(false);
+    setFormNovoHistorico({
+      data: new Date().toISOString().split('T')[0],
+      procedimentoId: '',
+      valor: '',
+      observacoes: '',
+    });
     setModalHistoricoAberto(true);
+    carregarHistorico(c.id);
+  };
+
+  const handleProcedimentoChange = (procId) => {
+    const proc = procedimentos.find((p) => String(p.id) === String(procId));
+    setFormNovoHistorico((prev) => ({
+      ...prev,
+      procedimentoId: procId,
+      valor: proc ? proc.valor : prev.valor,
+    }));
+  };
+
+  const handleSalvarNovoHistorico = async (e) => {
+    e.preventDefault();
+    if (!formNovoHistorico.procedimentoId) return;
+    try {
+      const res = await fetch('http://localhost:8080/api/v1/historicos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clienteId: clienteSelecionadoHistorico.id,
+          procedimentoId: Number(formNovoHistorico.procedimentoId),
+          data: formNovoHistorico.data,
+          valor: Number(formNovoHistorico.valor) || 0,
+          observacoes: formNovoHistorico.observacoes,
+        }),
+      });
+      if (res.ok) {
+        setMostrarFormNovoHistorico(false);
+        setFormNovoHistorico({
+          data: new Date().toISOString().split('T')[0],
+          procedimentoId: '',
+          valor: '',
+          observacoes: '',
+        });
+        carregarHistorico(clienteSelecionadoHistorico.id);
+        carregarClientes();
+      }
+    } catch (erro) {
+      console.error("Erro ao salvar histórico:", erro);
+    }
+  };
+
+  const handleExcluirHistorico = async (id) => {
+    if (!confirm('Deseja excluir este registro de atendimento?')) return;
+    try {
+      const res = await fetch(`http://localhost:8080/api/v1/historicos/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        carregarHistorico(clienteSelecionadoHistorico.id);
+        carregarClientes();
+      }
+    } catch (erro) {
+      console.error("Erro ao excluir histórico:", erro);
+    }
   };
 
   return (
@@ -201,7 +320,7 @@ export function Clientes() {
                 <th className="py-3 px-4 font-semibold">E-mail</th>
                 <th className="py-3 px-4 font-semibold">Status / Tipo</th>
                 <th className="py-3 px-4 font-semibold">Última Visita</th>
-                <th className="py-3 px-4 font-semibold">Último Procedimento</th>
+                <th className="py-3 px-4 font-semibold">Observações</th>
                 <th className="py-3 px-4 font-semibold text-right">Ações</th>
               </tr>
             </thead>
@@ -241,8 +360,10 @@ export function Clientes() {
                       <td className="py-3 px-4">
                         <span className={`badge ${badgeClass} capitalize`}>{c.tipo}</span>
                       </td>
-                      <td className="py-3 px-4 text-gray-500">{c.ultimaVisita || '-'}</td>
-                      <td className="py-3 px-4 text-gray-700 font-medium">{c.ultimoProc || '-'}</td>
+                      <td className="py-3 px-4 text-gray-500 font-mono text-[11px]">
+                        {c.ultimaVisita ? new Date(c.ultimaVisita).toLocaleDateString('pt-BR') : '-'}
+                      </td>
+                      <td className="py-3 px-4 text-gray-700 font-medium">{c.observacoes || '-'}</td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {podeHistorico && (
@@ -261,6 +382,15 @@ export function Clientes() {
                               className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             >
                               <Edit2 size={15} />
+                            </button>
+                          )}
+                          {podeExcluir && (
+                            <button
+                              onClick={() => handleExcluirCliente(c)}
+                              title="Excluir Cadastro"
+                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={15} />
                             </button>
                           )}
                         </div>
@@ -375,13 +505,14 @@ export function Clientes() {
       {/* MODAL: HISTÓRICO DE ATENDIMENTOS */}
       {modalHistoricoAberto && clienteSelecionadoHistorico && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-gray-100 animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 flex-shrink-0">
               <div>
                 <h3 className="font-semibold text-gray-800 text-sm">
                   Histórico – {clienteSelecionadoHistorico.nome}
                 </h3>
-                <p className="text-[11px] text-gray-400">Atendimentos anteriores e observações</p>
+                <p className="text-[11px] text-gray-400">Atendimentos realizados e observações</p>
               </div>
               <button
                 onClick={() => setModalHistoricoAberto(false)}
@@ -391,31 +522,135 @@ export function Clientes() {
               </button>
             </div>
 
-            <div className="mt-4 max-h-80 overflow-y-auto space-y-2.5">
-              {HISTORICO_CLIENTES[clienteSelecionadoHistorico.id]?.length ? (
-                HISTORICO_CLIENTES[clienteSelecionadoHistorico.id].map((h, i) => (
-                  <div
-                    key={i}
-                    className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-xs flex flex-col gap-1"
+            {/* Botão para abrir form de novo atendimento */}
+            <div className="pt-3 pb-1 flex items-center justify-between flex-shrink-0">
+              <span className="text-xs text-gray-500 font-medium">
+                {historicoAtendimentos.length} atendimento(s) registrado(s)
+              </span>
+              <button
+                type="button"
+                onClick={() => setMostrarFormNovoHistorico(!mostrarFormNovoHistorico)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-[#b5606e] rounded-xl text-xs font-semibold transition-colors"
+              >
+                <Plus size={13} />
+                {mostrarFormNovoHistorico ? 'Cancelar' : 'Novo Atendimento'}
+              </button>
+            </div>
+
+            {/* Formulário Novo Atendimento (se aberto) */}
+            {mostrarFormNovoHistorico && (
+              <form onSubmit={handleSalvarNovoHistorico} className="p-3 my-2 rounded-xl bg-rose-50/40 border border-rose-100 space-y-2.5 flex-shrink-0">
+                <p className="text-xs font-semibold text-gray-700">Registrar Atendimento</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Procedimento *</label>
+                    <select
+                      required
+                      value={formNovoHistorico.procedimentoId}
+                      onChange={(e) => handleProcedimentoChange(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-rose-400"
+                    >
+                      <option value="">Selecione...</option>
+                      {procedimentos.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Data *</label>
+                    <input
+                      type="date"
+                      required
+                      value={formNovoHistorico.data}
+                      onChange={(e) => setFormNovoHistorico({ ...formNovoHistorico, data: e.target.value })}
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-rose-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Valor (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0,00"
+                      value={formNovoHistorico.valor}
+                      onChange={(e) => setFormNovoHistorico({ ...formNovoHistorico, valor: e.target.value })}
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-rose-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Observação</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Sessão 1 de 5"
+                      value={formNovoHistorico.observacoes}
+                      onChange={(e) => setFormNovoHistorico({ ...formNovoHistorico, observacoes: e.target.value })}
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-rose-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-[#c47a85] hover:bg-[#b5606e] rounded-lg transition-colors"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-gray-800">{h.proc}</span>
-                      <span className="font-semibold text-rose-600">{h.valor}</span>
+                    Salvar Atendimento
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Lista com scroll */}
+            <div className="mt-2 overflow-y-auto space-y-2.5 flex-1 pr-1">
+              {carregandoHistorico ? (
+                <div className="py-8 text-center text-gray-400 text-xs">
+                  Carregando atendimentos...
+                </div>
+              ) : historicoAtendimentos.length > 0 ? (
+                historicoAtendimentos.map((h) => (
+                  <div
+                    key={h.id}
+                    className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-xs flex items-center justify-between gap-3 hover:bg-rose-50/20 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-gray-800">{h.procedimentoNome}</span>
+                        <span className="font-semibold text-rose-600">
+                          R$ {Number(h.valor || 0).toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-gray-400 text-[11px] mt-0.5">
+                        <span className="font-mono">
+                          {h.data ? new Date(h.data + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
+                        </span>
+                        {h.observacoes && (
+                          <span className="italic text-gray-500 truncate">{h.observacoes}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-gray-400 text-[11px]">
-                      <span>Data: {h.data}</span>
-                      {h.obs && <span className="italic text-gray-500">{h.obs}</span>}
-                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleExcluirHistorico(h.id)}
+                      title="Excluir atendimento"
+                      className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 ))
               ) : (
                 <div className="py-8 text-center text-gray-400 text-xs">
-                  Nenhum histórico registrado para este cliente até o momento.
+                  Nenhum atendimento registrado para este cliente até o momento.
                 </div>
               )}
             </div>
 
-            <div className="pt-4 border-t border-gray-100 text-right">
+            {/* Footer */}
+            <div className="pt-3 mt-2 border-t border-gray-100 text-right flex-shrink-0">
               <button
                 onClick={() => setModalHistoricoAberto(false)}
                 className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"

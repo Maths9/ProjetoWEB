@@ -10,7 +10,8 @@ import {
   Edit2,
   X,
   User,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import Calendario from './Calendario';
 
@@ -19,7 +20,7 @@ export function Agendamento() {
   const [clientesDisponiveis, setClientesDisponiveis] = useState([]);
   const [procedimentosDisponiveis, setProcedimentosDisponiveis] = useState([]);
   const [dataSelecionada, setDataSelecionada] = useState(new Date().toISOString().split('T')[0]);
-  const [visualizacao, setVisualizacao] = useState('lista');
+  const [visualizacao, setVisualizacao] = useState('calendario');
 
   // Modal State
   const [modalAberto, setModalAberto] = useState(false);
@@ -87,12 +88,37 @@ export function Agendamento() {
     } catch (e) { console.error(e); }
   };
 
+  // Auxiliares de data e hora atuais (formato YYYY-MM-DD e HH:MM)
+  const getHojeISO = () => {
+    const agora = new Date();
+    return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+  };
+
+  const getAgoraTempo = () => {
+    const agora = new Date();
+    return `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const hojeISO = getHojeISO();
+  const agoraTempo = getAgoraTempo();
+
   // Abrir modal novo
-  const handleNovoAgendamento = () => {
+  const handleNovoAgendamento = (dataEspecifica) => {
+    const hoje = getHojeISO();
+    const dataAlvo = typeof dataEspecifica === 'string' ? dataEspecifica : dataSelecionada;
+
+    if (dataAlvo < hoje) {
+      alert(`⚠️ A data selecionada (${dataAlvo.split('-').reverse().join('/')}) já passou.\nPor favor, escolha a data de hoje (${hoje.split('-').reverse().join('/')}) ou uma data futura.`);
+      return;
+    }
+
     setAgendamentoEditando(null);
+    const horaAtual = getAgoraTempo();
+    const horaDefault = dataAlvo === hoje && horaAtual > '09:00' ? horaAtual : '09:00';
+
     setFormData({
-      data: dataSelecionada,
-      hora: '09:00',
+      data: dataAlvo,
+      hora: horaDefault,
       clienteId: clientesDisponiveis[0]?.id || '',
       procedimentoId: procedimentosDisponiveis[0]?.id || '',
       duracaoMin: procedimentosDisponiveis[0]?.duracaoMin || 60,
@@ -107,12 +133,28 @@ export function Agendamento() {
     setFormData({
       data: agendamento.data,
       hora: agendamento.hora,
-      clienteId: agendamento.clienteId,
-      procedimentoId: agendamento.procedimentoId,
+      clienteId: agendamento.cliente?.id || agendamento.clienteId,
+      procedimentoId: agendamento.procedimento?.id || agendamento.procedimentoId,
       duracaoMin: agendamento.duracaoMin,
       valor: agendamento.valor,
     });
     setModalAberto(true);
+  };
+
+  const handleExcluirAgendamento = async (id) => {
+    if (!confirm('Deseja realmente excluir este agendamento criado por engano?')) return;
+    try {
+      const res = await fetch(`http://localhost:8080/api/v1/agendamentos/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        carregarAgendamentos();
+      } else {
+        alert('Não foi possível excluir o agendamento.');
+      }
+    } catch (e) {
+      console.error('Erro ao excluir agendamento:', e);
+    }
   };
 
   // Procedimento change
@@ -129,31 +171,69 @@ export function Agendamento() {
   // Salvar agendamento
   const handleSalvar = async (e) => {
     e.preventDefault();
+
+    // --- Validação estrita de data/hora no passado ---
+    if (!agendamentoEditando) {
+      const hoje = getHojeISO();
+      const horaAtual = getAgoraTempo();
+
+      if (formData.data < hoje) {
+        alert(`⚠️ Não é possível agendar em datas passadas (${formData.data.split('-').reverse().join('/')}).\nEscolha a data de hoje ou uma data futura.`);
+        return;
+      }
+
+      if (formData.data === hoje && formData.hora < horaAtual) {
+        alert(`⚠️ O horário selecionado (${formData.hora}) já passou hoje.\nO horário atual é ${horaAtual}.`);
+        return;
+      }
+    }
+
+    if (!formData.clienteId || !formData.procedimentoId) {
+      alert('Selecione um cliente e um procedimento.');
+      return;
+    }
+
     try {
       const payload = {
-        ...formData,
-        cliente: { id: formData.clienteId },
-        procedimento: { id: formData.procedimentoId }
+        data: formData.data,
+        hora: formData.hora,
+        duracaoMin: Number(formData.duracaoMin),
+        valor: Number(formData.valor),
+        cliente: { id: Number(formData.clienteId) },
+        procedimento: { id: Number(formData.procedimentoId) },
+        status: 'CONFIRMADO',
       };
 
+      let res;
       if (agendamentoEditando) {
-        // Mocking PUT since AgendamentoController might not have PUT. Usually we POST to save/update
-        await fetch(`http://localhost:8080/api/v1/agendamentos`, {
-          method: 'POST',
+        // PUT correto para editar
+        res = await fetch(`http://localhost:8080/api/v1/agendamentos/${agendamentoEditando}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: agendamentoEditando, ...payload })
+          body: JSON.stringify(payload),
         });
       } else {
-        await fetch('http://localhost:8080/api/v1/agendamentos', {
+        // POST para criar novo
+        res = await fetch('http://localhost:8080/api/v1/agendamentos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...payload, status: 'CONFIRMADO' })
+          body: JSON.stringify(payload),
         });
       }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        alert(err?.message || 'Erro ao salvar agendamento. Tente novamente.');
+        return;
+      }
+
       setModalAberto(false);
-      carregarAgendamentos();
+      // Navega para a data do agendamento salvo para mostrar imediatamente no calendário
+      setDataSelecionada(formData.data);
+      await carregarAgendamentos();
     } catch (e) {
       console.error(e);
+      alert('Erro de conexão com o servidor.');
     }
   };
 
@@ -249,7 +329,7 @@ export function Agendamento() {
         {/* View Switcher & Action */}
         <div className="flex items-center gap-3">
           <div className="flex items-center bg-white p-1 rounded-xl border border-gray-100 shadow-2xs">
-            {['lista', 'semanal', 'calendario', 'mensal'].map((modo) => (
+            {['calendario', 'lista', 'semanal'].map((modo) => (
               <button
                 key={modo}
                 onClick={() => setVisualizacao(modo)}
@@ -354,6 +434,13 @@ export function Agendamento() {
                                   <XCircle size={15} />
                                 </button>
                               )}
+                              <button
+                                onClick={() => handleExcluirAgendamento(item.id)}
+                                title="Excluir Agendamento (Criado por engano)"
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={15} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -366,193 +453,155 @@ export function Agendamento() {
         </div>
       )}
 
-      {/* VIEW: CALENDARIO - combined list and calendar */}
+      {/* VIEW: CALENDARIO */}
       {visualizacao === 'calendario' && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-          <div className="p-4">
-            {/* List view (same as lista) */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-gray-600">
-                <thead>
-                  <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider text-[11px] bg-gray-50/50">
-                    <th className="py-3 px-4 font-semibold">Horário</th>
-                    <th className="py-3 px-4 font-semibold">Cliente</th>
-                    <th className="py-3 px-4 font-semibold">Procedimento</th>
-                    <th className="py-3 px-4 font-semibold">Duração</th>
-                    <th className="py-3 px-4 font-semibold">Valor</th>
-                    <th className="py-3 px-4 font-semibold">Status</th>
-                    <th className="py-3 px-4 font-semibold text-right">Ações Rápidas</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {agendamentosDoDia.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-gray-400">
-                        Nenhum agendamento encontrado para esta data.
-                      </td>
-                    </tr>
-                  ) : (
-                    agendamentosDoDia
-                      .sort((a, b) => a.hora.localeCompare(b.hora))
-                      .map((item) => {
-                        const badgeClasses = {
-                          confirmado: 'badge-green',
-                          aguardando: 'badge-yellow',
-                          cancelado: 'badge-red',
-                        };
-                        return (
-                          <tr key={item.id} className="hover:bg-rose-50/30 transition-colors">
-                            <td className="py-3 px-4 font-bold text-gray-800">{item.hora}</td>
-                            <td className="py-3 px-4 font-medium text-gray-800">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-[10px]">
-                                  {item.cliente?.nome?.charAt(0) || '?'}
-                                </div>
-                                <span>{item.cliente?.nome}</span>
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 text-gray-600">{item.procedimento?.nome}</td>
-                            <td className="py-3 px-4 text-gray-400">{item.duracaoMin} min</td>
-                            <td className="py-3 px-4 font-semibold text-gray-700">
-                              R$ {Number(item.valor).toFixed(2).replace('.', ',')}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className={`badge ${badgeClasses[item.status] || 'badge-gray'} capitalize`}>{item.status}</span>
-                            </td>
-                            <td className="py-3 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {item.status !== 'CONFIRMADO' && (
-                                  <button
-                                    onClick={() => atualizarStatus(item.id, 'CONFIRMADO')}
-                                    title="Confirmar Presença"
-                                    className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                  >
-                                    <CheckCircle size={15} />
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => handleEditar(item)}
-                                  title="Editar Agendamento"
-                                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                >
-                                  <Edit2 size={15} />
-                                </button>
-                                {item.status !== 'CANCELADO' && (
-                                  <button
-                                    onClick={() => atualizarStatus(item.id, 'CANCELADO')}
-                                    title="Cancelar Atendimento"
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  >
-                                    <XCircle size={15} />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {/* Calendar below */}
-            <div className="mt-6">
-              <Calendario agendamentos={agendamentos} setAgendamentos={setAgendamentos} />
-            </div>
-          </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
+          <Calendario
+            agendamentos={agendamentos}
+            onNovoAgendamento={handleNovoAgendamento}
+            onEditarAgendamento={handleEditar}
+            onAtualizarStatus={atualizarStatus}
+            onExcluirAgendamento={handleExcluirAgendamento}
+          />
         </div>
       )}
 
       {/* VIEW: SEMANAL */}
+      {visualizacao === 'semanal' && (() => {
+        // Calcula a semana que contém dataSelecionada (Domingo = 0)
+        const baseDate = new Date(dataSelecionada + 'T12:00:00');
+        const diaDaSemana = baseDate.getDay(); // 0=Dom..6=Sáb
+        const inicioSemana = new Date(baseDate);
+        inicioSemana.setDate(baseDate.getDate() - diaDaSemana); // vai para domingo
 
+        const diasDaSemana = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(inicioSemana);
+          d.setDate(inicioSemana.getDate() + i);
+          const dataStr = d.toISOString().split('T')[0];
+          const nomesDia = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+          const label = `${nomesDia[i]} ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+          return { label, data: dataStr };
+        });
 
-      {/* VIEW: SEMANAL */}
-      {visualizacao === 'semanal' && (
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
-            {[
-              { label: 'Seg 07/09', data: '2026-09-07' },
-              { label: 'Ter 08/09', data: '2026-09-08' },
-              { label: 'Qua 09/09', data: '2026-09-09' },
-              { label: 'Qui 10/09', data: '2026-09-10' },
-              { label: 'Sex 11/09', data: '2026-09-11' },
-              { label: 'Sáb 12/09', data: '2026-09-12' },
-              { label: 'Dom 13/09', data: '2026-09-13' },
-            ].map((dia) => {
-              const itens = agendamentos.filter((a) => a.data === dia.data);
-              const isToday = dia.data === dataSelecionada;
-              return (
-                <div
-                  key={dia.data}
-                  className={`p-3 rounded-xl border transition-all ${
-                    isToday ? 'border-rose-300 bg-rose-50/30' : 'border-gray-100 bg-gray-50/50'
-                  }`}
-                >
-                  <p className={`font-semibold text-xs mb-2.5 ${isToday ? 'text-rose-600' : 'text-gray-600'}`}>
-                    {dia.label}
-                  </p>
-                  <div className="space-y-2">
-                    {itens.length === 0 ? (
-                      <p className="text-[10px] text-gray-300 italic">Sem atendimentos</p>
-                    ) : (
-                      itens.map((it) => (
-                        <div
-                          key={it.id}
-                          className="p-2 rounded-lg bg-white border border-rose-100 text-[11px] shadow-2xs"
-                        >
-                          <div className="font-bold text-gray-800">{it.hora} - {it.cliente?.nome}</div>
-                          <div className="text-gray-500 truncate">{it.procedimento?.nome}</div>
-                        </div>
-                      ))
-                    )}
+        return (
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-xs font-semibold text-gray-500 mb-3">
+              Semana de {diasDaSemana[0].label.split(' ')[1]} a {diasDaSemana[6].label.split(' ')[1]}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+              {diasDaSemana.map((dia) => {
+                const itens = agendamentos.filter((a) => a.data === dia.data);
+                const isToday = dia.data === dataSelecionada;
+                return (
+                  <div
+                    key={dia.data}
+                    onClick={() => { setDataSelecionada(dia.data); setVisualizacao('lista'); }}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                      isToday ? 'border-rose-300 bg-rose-50/30' : 'border-gray-100 bg-gray-50/50 hover:border-rose-200'
+                    }`}
+                  >
+                    <p className={`font-semibold text-xs mb-2.5 ${isToday ? 'text-rose-600' : 'text-gray-600'}`}>
+                      {dia.label}
+                    </p>
+                    <div className="space-y-2">
+                      {itens.length === 0 ? (
+                        <p className="text-[10px] text-gray-300 italic">Sem atendimentos</p>
+                      ) : (
+                        itens.map((it) => (
+                          <div
+                            key={it.id}
+                            className="p-2 rounded-lg bg-white border border-rose-100 text-[11px] shadow-2xs"
+                          >
+                            <div className="font-bold text-gray-800">
+                              {typeof it.hora === 'string' ? it.hora.slice(0,5) : it.hora} – {it.cliente?.nome || 'Cliente'}
+                            </div>
+                            <div className="text-gray-500 truncate">{it.procedimento?.nome || ''}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* VIEW: MENSAL */}
-      {visualizacao === 'mensal' && (
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="text-center font-semibold text-gray-700 text-sm mb-4">Setembro 2026</div>
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-gray-400 mb-2">
-            <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+      {visualizacao === 'mensal' && (() => {
+        const refDate = new Date(dataSelecionada + 'T12:00:00');
+        const ano = refDate.getFullYear();
+        const mes = refDate.getMonth(); // 0-indexed
+        const nomeMes = refDate.toLocaleString('pt-BR', { month: 'long' });
+        const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+        const primeiroDiaSemana = new Date(ano, mes, 1).getDay(); // 0=Dom
+        const totalCelulas = primeiroDiaSemana + diasNoMes;
+        const linhas = Math.ceil(totalCelulas / 7);
+        const totalCom = linhas * 7;
+
+        const irParaMesAnterior = () => {
+          const d = new Date(ano, mes - 1, 1);
+          setDataSelecionada(d.toISOString().split('T')[0]);
+        };
+        const irParaMesSeguinte = () => {
+          const d = new Date(ano, mes + 1, 1);
+          setDataSelecionada(d.toISOString().split('T')[0]);
+        };
+
+        return (
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            {/* Cabeçalho do mês */}
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={irParaMesAnterior} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 text-sm">‹</button>
+              <span className="font-semibold text-gray-700 text-sm capitalize">
+                {nomeMes} {ano}
+              </span>
+              <button onClick={irParaMesSeguinte} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 text-sm">›</button>
+            </div>
+
+            {/* Nomes dos dias */}
+            <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold text-gray-400 mb-2">
+              {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => <div key={d}>{d}</div>)}
+            </div>
+
+            {/* Células do calendário */}
+            <div className="grid grid-cols-7 gap-1.5">
+              {Array.from({ length: totalCom }, (_, i) => {
+                const diaNum = i - primeiroDiaSemana + 1;
+                const valido = diaNum >= 1 && diaNum <= diasNoMes;
+                if (!valido) return <div key={i} />;
+
+                const diaFmt = String(diaNum).padStart(2, '0');
+                const mesFmt = String(mes + 1).padStart(2, '0');
+                const dataStr = `${ano}-${mesFmt}-${diaFmt}`;
+                const ags = agendamentos.filter((a) => a.data === dataStr);
+                const isSelected = dataStr === dataSelecionada;
+
+                return (
+                  <div
+                    key={i}
+                    onClick={() => { setDataSelecionada(dataStr); setVisualizacao('lista'); }}
+                    className={`h-16 p-2 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                      isSelected ? 'border-rose-400 bg-rose-50/50' : 'border-gray-100 hover:border-rose-200 bg-gray-50/30'
+                    }`}
+                  >
+                    <span className={`text-xs font-semibold ${isSelected ? 'text-rose-600' : 'text-gray-700'}`}>
+                      {diaNum}
+                    </span>
+                    {ags.length > 0 && (
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                        <span className="text-[10px] font-bold text-rose-600">{ags.length} atend.</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="grid grid-cols-7 gap-2">
-            {Array.from({ length: 30 }, (_, i) => {
-              const diaNum = i + 1;
-              const diaFmt = (diaNum < 10 ? '0' : '') + diaNum;
-              const dataStr = `2026-09-${diaFmt}`;
-              const ags = agendamentos.filter((a) => a.data === dataStr);
-              const isSelected = dataStr === dataSelecionada;
-              return (
-                <div
-                  key={diaNum}
-                  onClick={() => {
-                    setDataSelecionada(dataStr);
-                    setVisualizacao('lista');
-                  }}
-                  className={`h-16 p-2 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
-                    isSelected ? 'border-rose-400 bg-rose-50/50' : 'border-gray-100 hover:border-gray-300 bg-gray-50/30'
-                  }`}
-                >
-                  <span className={`text-xs font-semibold ${isSelected ? 'text-rose-600' : 'text-gray-700'}`}>
-                    {diaNum}
-                  </span>
-                  {ags.length > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-rose-500" />
-                      <span className="text-[10px] font-bold text-rose-600">{ags.length} atend.</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL: NOVO / EDITAR */}
       {modalAberto && (
@@ -578,6 +627,7 @@ export function Agendamento() {
                     type="date"
                     required
                     value={formData.data}
+                    min={agendamentoEditando ? undefined : hojeISO}
                     onChange={(e) => setFormData({ ...formData, data: e.target.value })}
                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400"
                   />
@@ -588,9 +638,13 @@ export function Agendamento() {
                     type="time"
                     required
                     value={formData.hora}
+                    min={(!agendamentoEditando && formData.data === hojeISO) ? agoraTempo : undefined}
                     onChange={(e) => setFormData({ ...formData, hora: e.target.value })}
                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-rose-400"
                   />
+                  {!agendamentoEditando && formData.data === hojeISO && (
+                    <p className="text-[10px] text-amber-500 mt-0.5">Horários passados bloqueados</p>
+                  )}
                 </div>
               </div>
 
